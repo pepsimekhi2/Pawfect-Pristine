@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Pawfect & Pristine — Clean Home, Happy Paws</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --green-dark: #1e3a2f;
+    --green-mid: #2e6047;
+    --green: #3d7a5c;
+    --green-light: #eef7f2;
+    --green-muted: #7a9e8a;
+    --green-pale: #a8cfc0;
+    --text: #2d2d2d;
+    --border: #e8f0eb;
+    --bg: #fff;
+    --bg-soft: #fdf9f5;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    color: var(--text);
+    background: var(--bg);
+    overflow-x: hidden;
+  }
+
+  /* ── NAV ── */
+  .nav {
+    background: #fff;
+    border-bottom: 1px solid #f0ede8;
+    padding: 0 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 64px;
+    position: sticky;
+    top: 0;
+    z-index: 200;
+  }
+  .logo { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+  .logo-icon {
+    width: 38px; height: 38px; background: var(--green);
+    border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px;
+  }
+  .logo-text { font-family: 'Playfair Display', serif; font-size: 17px; font-weight: 700; color: var(--green-dark); line-height: 1.1; }
+  .logo-sub { font-size: 9px; font-weight: 400; font-family: 'Inter', sans-serif; letter-spacing: 0.12em; color: var(--green-muted); text-transform: uppercase; }
+  .nav-links { display: flex; gap: 1.5rem; list-style: none; }
+  .nav-links a { font-size: 13px; font-weight: 500; color: #4a4a4a; text-decoration: none; transition: color 0.2s; }
+  .nav-links a:hover { color: var(--green); }
+  .btn { background: var(--green); color: #fff; border: none; padding: 9px 20px; border-radius: 24px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: 'Inter', sans-serif; transition: background 0.2s; text-decoration: none; display: inline-block; }
+  .btn:hover { background: var(--green-mid); }
+  .btn-outline { background: transparent; color: var(--green); border: 1.5px solid var(--green); padding: 9px 20px; border-radius: 24px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: 'Inter', sans-serif; transition: all 0.2s; text-decoration: none; display: inline-block; }
+  .btn-outline:hover { background: var(--green); color: #fff; }
+
+  /* ── HERO ── */
+  .hero { display: grid; grid-template-columns: 1fr 1fr; min-height: 540px; overflow: hidden; }
+  .hero-left { background: linear-gradient(135deg, #eef7f2 0%, #d8edd8 100%); padding: 4rem 3rem; display: flex; flex-direction: column; justify-content: center; }
+  .eyebrow { font-size: 11px; font-weight: 600; letter-spacing: 0.18em; text-transform: uppercase; color: var(--green); margin-bottom: 1.2rem; display: block; }
+  .hero-title { font-family: 'Playfair Display', serif; font-size: 42px; font-weight: 700; color: var(--green-dark); line-height: 1.15; margin-bottom: 1rem; }
+  .hero-title em { font-style: italic; color: var(--green); }
+  .hero-sub { font-size: 15px; color: #4a6a57; line-height: 1.7; margin-bottom: 2rem; max-width: 380px; }
+  .hero-ctas { display: flex; gap: 12px; flex-wrap: wrap; }
+  .hero-right { position: relative; overflow: hidden; }
+  .hero-right img { width: 100%; height: 100%; object-fit: cover; }
+  .hero-badge { position: absolute; bottom: 20px; left: 20px; background: #fff; border-radius: 14px; padding: 10px 16px; display: flex; align-items: center; gap: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.12); }
+  .badge-dot { width: 10px; height: 10px; background: var(--green); border-radius: 50%; }
+  .badge-text { font-size: 12px; font-weight: 500; color: var(--green-dark); }
+
+  /* ── STRIP ── */
+  .strip { background: var(--green-dark); padding: 14px 2rem; display: flex; align-items: center; justify-content: center; gap: 2rem; flex-wrap: wrap; }
+  .strip-item { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--green-pale); font-weight: 400; }
+  .strip-item span { color: #fff; font-weight: 500; }
+  .strip-dot { width: 4px; height: 4px; background: var(--green); border-radius: 50%; }
+
+  /* ── SECTIONS ── */
+  .section { padding: 4rem 2rem; max-width: 1000px; margin: 0 auto; }
+  .section-title { font-family: 'Playfair Display', serif; font-size: 30px; font-weight: 700; color: var(--green-dark); margin-bottom: 0.4rem; }
+  .section-sub { font-size: 14px; color: var(--green-muted); margin-bottom: 2.5rem; }
+
+  /* ── SERVICES GRID ── */
+  .services-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 16px; }
+  .service-card { border: 1px solid var(--border); border-radius: 16px; padding: 1.5rem; background: #fff; transition: box-shadow 0.2s, transform 0.2s; }
+  .service-card:hover { box-shadow: 0 8px 32px rgba(61,122,92,0.1); transform: translateY(-2px); }
+  .service-icon { width: 46px; height: 46px; border-radius: 12px; display: flex; align-items: center; justify-content: center; margin-bottom: 1rem; font-size: 22px; }
+  .service-icon.green { background: var(--green-light); }
+  .service-icon.warm { background: #fdf4e7; }
+  .service-card h3 { font-size: 15px; font-weight: 600; color: var(--green-dark); margin-bottom: 6px; }
+  .service-card p { font-size: 13px; color: #6b8878; line-height: 1.6; }
+  .service-tag { display: inline-block; margin-top: 12px; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; padding: 3px 10px; border-radius: 20px; }
+  .service-tag.home { background: var(--green-light); color: var(--green); }
+  .service-tag.pet { background: #fdf4e7; color: #b87a2e; }
+
+  /* ── SPLIT SECTION ── */
+  .split { display: grid; grid-template-columns: 1fr 1fr; min-height: 400px; overflow: hidden; border-radius: 20px; margin: 0 2rem 4rem; }
+  .split-img { overflow: hidden; }
+  .split-img img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.4s; }
+  .split-img:hover img { transform: scale(1.03); }
+  .split-content { background: var(--green-dark); padding: 3rem; display: flex; flex-direction: column; justify-content: center; }
+  .split-content h2 { font-family: 'Playfair Display', serif; font-size: 28px; color: #fff; margin-bottom: 1rem; line-height: 1.25; }
+  .split-content p { font-size: 14px; color: var(--green-pale); line-height: 1.8; margin-bottom: 1.5rem; }
+  .feature-list { list-style: none; display: flex; flex-direction: column; gap: 10px; margin-bottom: 2rem; }
+  .feature-list li { display: flex; align-items: center; gap: 10px; font-size: 13px; color: #c8e8d8; }
+  .check { width: 18px; height: 18px; background: var(--green); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #fff; flex-shrink: 0; }
+
+  /* ── PETS SECTION ── */
+  .pets-section { background: var(--bg-soft); padding: 4rem 2rem; }
+  .pets-inner { max-width: 1000px; margin: 0 auto; }
+  .gallery { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: 2rem; }
+  .gallery-item { border-radius: 16px; overflow: hidden; aspect-ratio: 1; position: relative; }
+  .gallery-item img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.3s; }
+  .gallery-item:hover img { transform: scale(1.05); }
+  .gallery-label { position: absolute; bottom: 10px; left: 10px; background: rgba(30,58,47,0.85); color: #fff; font-size: 11px; font-weight: 500; padding: 4px 10px; border-radius: 20px; }
+  .why-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-top: 2.5rem; }
+  .why-item { text-align: center; padding: 1.5rem 1rem; }
+  .why-num { font-family: 'Playfair Display', serif; font-size: 38px; font-weight: 700; color: var(--green); line-height: 1; margin-bottom: 6px; }
+  .why-label { font-size: 13px; color: #6b8878; line-height: 1.5; }
+
+  /* ── TESTIMONIALS ── */
+  .testimonials { padding: 4rem 2rem; background: #fff; }
+  .testi-inner { max-width: 1000px; margin: 0 auto; }
+  .testi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-top: 2.5rem; }
+  .testi-card { background: var(--green-light); border-radius: 16px; padding: 1.5rem; }
+  .stars { color: #d4a435; font-size: 14px; margin-bottom: 10px; letter-spacing: 2px; }
+  .testi-text { font-size: 13px; color: #3a5a47; line-height: 1.7; margin-bottom: 1rem; font-style: italic; }
+  .testi-author { display: flex; align-items: center; gap: 10px; }
+  .testi-avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--green); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; color: #fff; flex-shrink: 0; }
+  .testi-name { font-size: 13px; font-weight: 600; color: var(--green-dark); }
+  .testi-loc { font-size: 11px; color: var(--green-muted); }
+
+  /* ── CTA SECTION ── */
+  .cta-section { background: linear-gradient(135deg, var(--green-dark) 0%, var(--green-mid) 100%); padding: 4rem 2rem; text-align: center; }
+  .cta-section h2 { font-family: 'Playfair Display', serif; font-size: 34px; color: #fff; margin-bottom: 1rem; }
+  .cta-section p { font-size: 15px; color: var(--green-pale); margin-bottom: 2rem; max-width: 480px; margin-left: auto; margin-right: auto; line-height: 1.7; }
+  .cta-btns { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .btn-white { background: #fff; color: var(--green-dark); border: none; padding: 12px 28px; border-radius: 28px; font-size: 14px; font-weight: 600; cursor: pointer; font-family: 'Inter', sans-serif; transition: background 0.2s; text-decoration: none; display: inline-block; }
+  .btn-white:hover { background: var(--green-light); }
+  .btn-ghost { background: transparent; color: #fff; border: 1.5px solid rgba(255,255,255,0.4); padding: 12px 28px; border-radius: 28px; font-size: 14px; font-weight: 500; cursor: pointer; font-family: 'Inter', sans-serif; transition: all 0.2s; text-decoration: none; display: inline-block; }
+  .btn-ghost:hover { border-color: #fff; background: rgba(255,255,255,0.1); }
+
+  /* ── FOOTER ── */
+  footer { background: #0f2018; padding: 3rem 2rem 2rem; }
+  .footer-inner { max-width: 1000px; margin: 0 auto; display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 2rem; }
+  footer h4 { font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: #7aaa90; margin-bottom: 1rem; }
+  footer p { font-size: 13px; color: #6b8878; line-height: 1.7; }
+  footer ul { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+  footer ul a { font-size: 13px; color: #6b8878; text-decoration: none; transition: color 0.2s; }
+  footer ul a:hover { color: var(--green-pale); }
+  .footer-bottom { max-width: 1000px; margin: 2rem auto 0; padding-top: 1.5rem; border-top: 1px solid #1e3a2f; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+  .footer-bottom p { font-size: 12px; color: #4a6a57; }
+
+  /* ── BOOKING MODAL ── */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.55);
+    z-index: 999; align-items: center; justify-content: center; padding: 1rem;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: #fff; border-radius: 20px; width: 100%; max-width: 560px;
+    max-height: 92vh; overflow-y: auto; position: relative;
+    box-shadow: 0 24px 80px rgba(0,0,0,0.25);
+  }
+  .modal-close {
+    position: absolute; top: 14px; right: 16px; background: rgba(255,255,255,0.2);
+    border: none; color: #fff; font-size: 20px; cursor: pointer; border-radius: 50%;
+    width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
+    font-family: 'Inter', sans-serif; z-index: 10;
+  }
+  .modal-close:hover { background: rgba(255,255,255,0.35); }
+
+  /* ── BOOKING STYLES ── */
+  .bk-head { background: linear-gradient(135deg, var(--green-dark) 0%, var(--green-mid) 100%); padding: 1.5rem 2rem; display: flex; align-items: center; gap: 12px; border-radius: 20px 20px 0 0; }
+  .bk-logo { width: 40px; height: 40px; background: rgba(255,255,255,0.15); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 20px; }
+  .bk-head-text h2 { font-family: 'Playfair Display', serif; font-size: 18px; color: #fff; margin-bottom: 2px; }
+  .bk-head-text p { font-size: 12px; color: var(--green-pale); }
+  .bk-progress { display: flex; padding: 1.2rem 2rem; border-bottom: 1px solid #f0ede8; }
+  .bk-step { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 5px; position: relative; }
+  .bk-step:not(:last-child)::after { content: ''; position: absolute; top: 13px; left: 50%; width: 100%; height: 1.5px; background: #e2ede7; z-index: 0; }
+  .bk-step-dot { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; z-index: 1; transition: all 0.3s; }
+  .bk-step-dot.done { background: var(--green); color: #fff; }
+  .bk-step-dot.active { background: var(--green-dark); color: #fff; box-shadow: 0 0 0 3px #d0ebd9; }
+  .bk-step-dot.todo { background: #f0ede8; color: #aaa; }
+  .bk-step-label { font-size: 10px; color: #aaa; font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap; }
+  .bk-step-label.active-label { color: var(--green-dark); font-weight: 600; }
+  .bk-body { padding: 2rem; }
+  .step-panel { display: none; }
+  .step-panel.visible { display: block; }
+  .step-title { font-family: 'Playfair Display', serif; font-size: 20px; color: var(--green-dark); margin-bottom: 0.3rem; }
+  .step-sub { font-size: 13px; color: var(--green-muted); margin-bottom: 1.5rem; line-height: 1.6; }
+  .bk-label { font-size: 12px; font-weight: 600; color: #3a5a47; letter-spacing: 0.04em; text-transform: uppercase; margin-bottom: 6px; margin-top: 1rem; display: block; }
+  .bk-label:first-child { margin-top: 0; }
+  .bk-input { width: 100%; padding: 10px 14px; border: 1.5px solid #dde8e2; border-radius: 10px; font-size: 14px; font-family: 'Inter', sans-serif; color: var(--green-dark); outline: none; transition: border 0.2s; background: #fff; }
+  .bk-input:focus { border-color: var(--green); }
+  .bk-select { width: 100%; padding: 10px 14px; border: 1.5px solid #dde8e2; border-radius: 10px; font-size: 14px; font-family: 'Inter', sans-serif; color: var(--green-dark); outline: none; background: #fff; cursor: pointer; }
+  .bk-select:focus { border-color: var(--green); }
+  .bk-textarea { width: 100%; padding: 10px 14px; border: 1.5px solid #dde8e2; border-radius: 10px; font-size: 14px; font-family: 'Inter', sans-serif; color: var(--green-dark); outline: none; resize: vertical; min-height: 80px; transition: border 0.2s; background: #fff; }
+  .bk-textarea:focus { border-color: var(--green); }
+  .service-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 1rem; }
+  .svc-btn { padding: 12px; border: 1.5px solid #dde8e2; border-radius: 12px; background: #fff; cursor: pointer; text-align: left; transition: all 0.2s; font-family: 'Inter', sans-serif; }
+  .svc-btn:hover { border-color: var(--green); background: #f0faf4; }
+  .svc-btn.selected { border-color: var(--green); background: var(--green-light); }
+  .svc-icon-sm { font-size: 20px; margin-bottom: 4px; display: block; }
+  .svc-name { font-size: 13px; font-weight: 600; color: var(--green-dark); display: block; }
+  .svc-type { font-size: 11px; color: var(--green-muted); }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .bk-btn-main { background: var(--green); color: #fff; border: none; padding: 12px 24px; border-radius: 24px; font-size: 14px; font-weight: 600; cursor: pointer; font-family: 'Inter', sans-serif; transition: background 0.2s; width: 100%; margin-top: 1.2rem; }
+  .bk-btn-main:hover { background: var(--green-mid); }
+  .bk-btn-back { background: transparent; color: var(--green-muted); border: 1.5px solid #dde8e2; padding: 10px 20px; border-radius: 24px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: 'Inter', sans-serif; margin-top: 0.8rem; width: 100%; }
+  .bk-btn-back:hover { border-color: var(--green); color: var(--green); }
+  .eta-box { background: var(--green-light); border-radius: 14px; padding: 1.2rem 1.4rem; margin-top: 1.2rem; border: 1px solid #c2dfc9; }
+  .eta-box h4 { font-size: 13px; font-weight: 600; color: var(--green-dark); margin-bottom: 4px; }
+  .eta-main { font-size: 28px; font-weight: 700; color: var(--green); font-family: 'Playfair Display', serif; }
+  .eta-sub { font-size: 12px; color: var(--green-muted); margin-top: 4px; }
+  .zone-warn { background: #fff8e1; border: 1px solid #ffe082; border-radius: 10px; padding: 10px 14px; font-size: 12px; color: #7a5c00; margin-top: 0.8rem; display: none; }
+  .summary-row { display: flex; justify-content: space-between; align-items: flex-start; padding: 10px 0; border-bottom: 1px solid #f0ede8; font-size: 13px; }
+  .summary-row:last-child { border-bottom: none; }
+  .summary-key { color: var(--green-muted); font-weight: 500; flex-shrink: 0; margin-right: 12px; }
+  .summary-val { color: var(--green-dark); font-weight: 500; text-align: right; }
+  .confirm-icon { width: 56px; height: 56px; background: var(--green-light); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 26px; margin: 0 auto 1rem; }
+  .bk-error { font-size: 12px; color: #c0392b; margin-top: 5px; display: none; }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 768px) {
+    .nav-links { display: none; }
+    .hero { grid-template-columns: 1fr; }
+    .hero-right { height: 260px; }
+    .hero-left { padding: 2.5rem 1.5rem; }
+    .hero-title { font-size: 30px; }
+    .split { grid-template-columns: 1fr; margin: 0 1rem 3rem; }
+    .gallery { grid-template-columns: 1fr 1fr; }
+    .footer-inner { grid-template-columns: 1fr 1fr; }
+    .strip { gap: 1rem; }
+    .strip-dot { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════
+     NAV
+════════════════════════════════════════ -->
+<nav class="nav">
+  <a href="#" class="logo">
+    <div class="logo-icon">🐾</div>
+    <div>
+      <div class="logo-text">Pawfect & Pristine</div>
+      <div class="logo-sub">Home & Pet Services</div>
+    </div>
+  </a>
+  <ul class="nav-links">
+    <li><a href="#services">Services</a></li>
+    <li><a href="#pets">Pet Care</a></li>
+    <li><a href="#about">About</a></li>
+    <li><a href="#reviews">Reviews</a></li>
+  </ul>
+  <button class="btn" onclick="openBooking()">Book a Visit</button>
+</nav>
+
+<!-- ════════════════════════════════════════
+     HERO
+════════════════════════════════════════ -->
+<section class="hero">
+  <div class="hero-left">
+    <span class="eyebrow">Local Home & Pet Services · Decatur & East Atlanta</span>
+    <h1 class="hero-title">Clean home,<br><em>Happy Paws.</em></h1>
+    <p class="hero-sub">A clean home and a happy pet makes a better day — every single day. We handle the scrubbing and the snuggling so you don't have to.</p>
+    <div class="hero-ctas">
+      <button class="btn" onclick="openBooking()">Book a Visit</button>
+      <a href="#services" class="btn-outline">Our Services</a>
+    </div>
+  </div>
+  <div class="hero-right">
+    <img src="https://images.unsplash.com/photo-1583511655857-d19b40a7a54e?w=800&auto=format&fit=crop" alt="Happy dog on a clean couch" />
+    <div class="hero-badge">
+      <div class="badge-dot"></div>
+      <div class="badge-text">Locally owned & operated 🏡</div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════
+     STRIP
+════════════════════════════════════════ -->
+<div class="strip">
+  <div class="strip-item"><span>🧹 Home Cleaning</span></div>
+  <div class="strip-dot"></div>
+  <div class="strip-item"><span>🐕 Dog Walking</span></div>
+  <div class="strip-dot"></div>
+  <div class="strip-item"><span>🐱 Pet Sitting</span></div>
+  <div class="strip-dot"></div>
+  <div class="strip-item"><span>📦 Organizing</span></div>
+  <div class="strip-dot"></div>
+  <div class="strip-item"><span>🏠 Garages & Sheds</span></div>
+  <div class="strip-dot"></div>
+  <div class="strip-item"><span>🐾 Play & Care</span></div>
+</div>
+
+<!-- ════════════════════════════════════════
+     SERVICES
+════════════════════════════════════════ -->
+<div id="services" class="section">
+  <span class="eyebrow">What We Do</span>
+  <h2 class="section-title">Two things we love — done right</h2>
+  <p class="section-sub">Expert home cleaning & heartfelt pet care, under one roof.</p>
+  <div class="services-grid">
+    <div class="service-card">
+      <div class="service-icon green">🧹</div>
+      <h3>General Cleaning</h3>
+      <p>Full home refresh — kitchens, bathrooms, floors, and surfaces spotless every visit.</p>
+      <span class="service-tag home">Home</span>
+    </div>
+    <div class="service-card">
+      <div class="service-icon green">✨</div>
+      <h3>Deep Cleaning</h3>
+      <p>Behind appliances, inside cabinets, grout lines — a thorough top-to-bottom reset.</p>
+      <span class="service-tag home">Home</span>
+    </div>
+    <div class="service-card">
+      <div class="service-icon green">📦</div>
+      <h3>Organizing</h3>
+      <p>Clutter-free spaces, sorted closets, and systems that actually stick long-term.</p>
+      <span class="service-tag home">Home</span>
+    </div>
+    <div class="service-card">
+      <div class="service-icon green">🏠</div>
+      <h3>Garages & Sheds</h3>
+      <p>Reclaim your garage. We sort, sweep, and organize even the most chaotic spaces.</p>
+      <span class="service-tag home">Home</span>
+    </div>
+    <div class="service-card">
+      <div class="service-icon warm">🐕</div>
+      <h3>Dog Walking</h3>
+      <p>Daily walks, leash training, and exercise for dogs of all sizes and energy levels.</p>
+      <span class="service-tag pet">Pet</span>
+    </div>
+    <div class="service-card">
+      <div class="service-icon warm">🐱</div>
+      <h3>Pet Sitting</h3>
+      <p>In-home overnight or drop-in sitting — your pets stay comfortable in their own space.</p>
+      <span class="service-tag pet">Pet</span>
+    </div>
+    <div class="service-card">
+      <div class="service-icon warm">🍽️</div>
+      <h3>Feeding & Care</h3>
+      <p>Regular feedings, fresh water, medication reminders, and wellness check-ins.</p>
+      <span class="service-tag pet">Pet</span>
+    </div>
+    <div class="service-card">
+      <div class="service-icon warm">🎾</div>
+      <h3>Playtime & Enrichment</h3>
+      <p>Mental stimulation, toys, fetch, and bonding time to keep your pets happy and thriving.</p>
+      <span class="service-tag pet">Pet</span>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     SPLIT — CLEANING HIGHLIGHT
+════════════════════════════════════════ -->
+<div id="about" class="split">
+  <div class="split-img">
+    <img src="https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=700&auto=format&fit=crop" alt="Clean bright home" />
+  </div>
+  <div class="split-content">
+    <h2>Your home, always at its best.</h2>
+    <p>From regular maintenance cleans to one-time deep cleans before guests arrive — we show up reliably and leave everything shining.</p>
+    <ul class="feature-list">
+      <li><div class="check">✓</div> Eco-friendly, pet-safe products</li>
+      <li><div class="check">✓</div> Flexible scheduling around your life</li>
+      <li><div class="check">✓</div> Garages, sheds & outdoor spaces too</li>
+      <li><div class="check">✓</div> Detailed checklists — nothing missed</li>
+    </ul>
+    <button class="btn" onclick="openBooking()">Book a Cleaning Visit</button>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     PETS SECTION
+════════════════════════════════════════ -->
+<section id="pets" class="pets-section">
+  <div class="pets-inner">
+    <span class="eyebrow">Pet Services</span>
+    <h2 class="section-title">Your pets are family. We treat them that way.</h2>
+    <p class="section-sub">Every visit is filled with patience, love, and lots of tail wags.</p>
+    <div class="gallery">
+      <div class="gallery-item">
+        <img src="https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=500&auto=format&fit=crop" alt="Dog on a walk" />
+        <div class="gallery-label">🐕 Dog Walking</div>
+      </div>
+      <div class="gallery-item">
+        <img src="https://images.unsplash.com/photo-1450778869180-41d0601e046e?w=500&auto=format&fit=crop" alt="Cat and dog together" />
+        <div class="gallery-label">🐾 Pet Sitting</div>
+      </div>
+      <div class="gallery-item">
+        <img src="https://images.unsplash.com/photo-1601758124510-52d02ddb7cbd?w=500&auto=format&fit=crop" alt="Puppy playing" />
+        <div class="gallery-label">🎾 Playtime</div>
+      </div>
+    </div>
+    <div class="why-grid">
+      <div class="why-item">
+        <div class="why-num">100%</div>
+        <div class="why-label">Pet-safe cleaning products used in every home</div>
+      </div>
+      <div class="why-item">
+        <div class="why-num">5★</div>
+        <div class="why-label">Consistently rated by happy local pet owners</div>
+      </div>
+      <div class="why-item">
+        <div class="why-num">Same</div>
+        <div class="why-label">Caregiver every visit — your pet knows us by name</div>
+      </div>
+      <div class="why-item">
+        <div class="why-num">Insured</div>
+        <div class="why-label">Fully covered so you can leave worry-free</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════
+     TESTIMONIALS
+════════════════════════════════════════ -->
+<section id="reviews" class="testimonials">
+  <div class="testi-inner">
+    <span class="eyebrow">Happy Clients</span>
+    <h2 class="section-title">Neighbors love us. So do their pets.</h2>
+    <p class="section-sub">Real words from real clients in our community.</p>
+    <div class="testi-grid">
+      <div class="testi-card">
+        <div class="stars">★★★★★</div>
+        <p class="testi-text">"My house has never felt so clean — and my dog Biscuit absolutely loves the team. They bring him a treat every single visit. I can't recommend them enough!"</p>
+        <div class="testi-author">
+          <div class="testi-avatar">SL</div>
+          <div>
+            <div class="testi-name">Sarah L.</div>
+            <div class="testi-loc">Dog mom & weekly cleaning client</div>
+          </div>
+        </div>
+      </div>
+      <div class="testi-card">
+        <div class="stars">★★★★★</div>
+        <p class="testi-text">"They tackled my garage in one afternoon — I hadn't been able to park in it for two years. Now it's spotless and organized. Genuinely life-changing."</p>
+        <div class="testi-author">
+          <div class="testi-avatar">MR</div>
+          <div>
+            <div class="testi-name">Marcus R.</div>
+            <div class="testi-loc">Deep clean & garage organizing</div>
+          </div>
+        </div>
+      </div>
+      <div class="testi-card">
+        <div class="stars">★★★★★</div>
+        <p class="testi-text">"I was nervous to leave my two cats, but they sent photo updates the whole trip. My cats were calm and happy when I got back. Already rebooked for next month."</p>
+        <div class="testi-author">
+          <div class="testi-avatar">JT</div>
+          <div>
+            <div class="testi-name">Jamie T.</div>
+            <div class="testi-loc">Pet sitting client</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════
+     CTA
+════════════════════════════════════════ -->
+<section class="cta-section">
+  <span class="eyebrow" style="color:#7aaa90;display:block;margin-bottom:1.2rem">Let's Get Started</span>
+  <h2>Ready for a cleaner home<br>& a happier pet?</h2>
+  <p>Book your first visit today — no contracts, no stress. Just a cleaner home and a pet who can't wait for us to come back.</p>
+  <div class="cta-btns">
+    <button class="btn-white" onclick="openBooking()">Book a Visit</button>
+    <a href="#services" class="btn-ghost">View Services</a>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════
+     FOOTER
+════════════════════════════════════════ -->
+<footer>
+  <div class="footer-inner">
+    <div>
+      <div class="logo" style="margin-bottom:1rem">
+        <div class="logo-icon">🐾</div>
+        <div>
+          <div class="logo-text" style="color:#c8e8d8">Pawfect & Pristine</div>
+          <div class="logo-sub">Home & Pet Services</div>
+        </div>
+      </div>
+      <p>A clean home & happy pet makes a better day. Locally owned, serving Decatur & East Atlanta.</p>
+    </div>
+    <div>
+      <h4>Home Services</h4>
+      <ul>
+        <li><a href="#services">General Cleaning</a></li>
+        <li><a href="#services">Deep Cleaning</a></li>
+        <li><a href="#services">Organizing</a></li>
+        <li><a href="#services">Garages & Sheds</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Pet Care</h4>
+      <ul>
+        <li><a href="#pets">Dog Walking</a></li>
+        <li><a href="#pets">Pet Sitting</a></li>
+        <li><a href="#pets">Feeding & Care</a></li>
+        <li><a href="#pets">Playtime</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Contact</h4>
+      <ul>
+        <li><a href="#">📞 Call Us</a></li>
+        <li><a href="#">📧 Email Us</a></li>
+        <li><a href="#">📍 Service Area</a></li>
+        <li><a href="#" onclick="openBooking();return false;">📅 Book a Visit</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <p>© 2026 Pawfect & Pristine. All rights reserved.</p>
+    <p>Made with 🐾 for pets & their people.</p>
+  </div>
+</footer>
+
+<!-- ════════════════════════════════════════
+     BOOKING MODAL
+════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal" onclick="handleOverlayClick(event)">
+  <div class="modal" id="modal-box">
+
+    <div class="bk-head">
+      <button class="modal-close" onclick="closeBooking()">✕</button>
+      <div class="bk-logo">🐾</div>
+      <div class="bk-head-text">
+        <h2>Book a Visit</h2>
+        <p>Pawfect & Pristine — Clean home, Happy Paws</p>
+      </div>
+    </div>
+
+    <!-- Progress Bar -->
+    <div class="bk-progress" id="bk-progress">
+      <div class="bk-step"><div class="bk-step-dot active" id="dot1">1</div><div class="bk-step-label active-label" id="lbl1">Services</div></div>
+      <div class="bk-step"><div class="bk-step-dot todo" id="dot2">2</div><div class="bk-step-label" id="lbl2">Schedule</div></div>
+      <div class="bk-step"><div class="bk-step-dot todo" id="dot3">3</div><div class="bk-step-label" id="lbl3">Contact</div></div>
+      <div class="bk-step"><div class="bk-step-dot todo" id="dot4">4</div><div class="bk-step-label" id="lbl4">Address</div></div>
+      <div class="bk-step"><div class="bk-step-dot todo" id="dot5">✓</div><div class="bk-step-label" id="lbl5">Done</div></div>
+    </div>
+
+    <div class="bk-body">
+
+      <!-- STEP 1: Services -->
+      <div class="step-panel visible" id="step1">
+        <h3 class="step-title">What can we help with?</h3>
+        <p class="step-sub">Select all the services you'd like — we do it all.</p>
+        <div class="service-grid">
+          <button class="svc-btn" onclick="toggleSvc(this,'General Cleaning')"><span class="svc-icon-sm">🧹</span><span class="svc-name">General Cleaning</span><span class="svc-type">Home</span></button>
+          <button class="svc-btn" onclick="toggleSvc(this,'Deep Cleaning')"><span class="svc-icon-sm">✨</span><span class="svc-name">Deep Cleaning</span><span class="svc-type">Home</span></button>
+          <button class="svc-btn" onclick="toggleSvc(this,'Organizing')"><span class="svc-icon-sm">📦</span><span class="svc-name">Organizing</span><span class="svc-type">Home</span></button>
+          <button class="svc-btn" onclick="toggleSvc(this,'Garage / Shed')"><span class="svc-icon-sm">🏠</span><span class="svc-name">Garage / Shed</span><span class="svc-type">Home</span></button>
+          <button class="svc-btn" onclick="toggleSvc(this,'Dog Walking')"><span class="svc-icon-sm">🐕</span><span class="svc-name">Dog Walking</span><span class="svc-type">Pet</span></button>
+          <button class="svc-btn" onclick="toggleSvc(this,'Pet Sitting')"><span class="svc-icon-sm">🐱</span><span class="svc-name">Pet Sitting</span><span class="svc-type">Pet</span></button>
+          <button class="svc-btn" onclick="toggleSvc(this,'Feeding & Care')"><span class="svc-icon-sm">🍽️</span><span class="svc-name">Feeding & Care</span><span class="svc-type">Pet</span></button>
+          <button class="svc-btn" onclick="toggleSvc(this,'Playtime')"><span class="svc-icon-sm">🎾</span><span class="svc-name">Playtime</span><span class="svc-type">Pet</span></button>
+        </div>
+        <label class="bk-label">Anything else you'd like us to know?</label>
+        <textarea class="bk-textarea" id="notes" placeholder="e.g. I have 2 dogs and a cat, my garage hasn't been touched in 3 years..."></textarea>
+        <div class="bk-error" id="err1">Please select at least one service.</div>
+        <button class="bk-btn-main" onclick="goStep(2)">Continue →</button>
+      </div>
+
+      <!-- STEP 2: Schedule -->
+      <div class="step-panel" id="step2">
+        <h3 class="step-title">When works for you?</h3>
+        <p class="step-sub">Pick a date and time and we'll make it happen.</p>
+        <label class="bk-label">Preferred Date</label>
+        <input class="bk-input" type="date" id="bk-date" />
+        <label class="bk-label">Preferred Time</label>
+        <select class="bk-select" id="bk-time">
+          <option value="">-- Select a time --</option>
+          <option>8:00 AM</option><option>9:00 AM</option><option>10:00 AM</option>
+          <option>11:00 AM</option><option>12:00 PM</option><option>1:00 PM</option>
+          <option>2:00 PM</option><option>3:00 PM</option><option>4:00 PM</option>
+          <option>5:00 PM</option>
+        </select>
+        <label class="bk-label">How often do you need service?</label>
+        <select class="bk-select" id="bk-freq">
+          <option value="">-- Select frequency --</option>
+          <option>One-time visit</option>
+          <option>Weekly</option>
+          <option>Bi-weekly</option>
+          <option>Monthly</option>
+          <option>As needed</option>
+        </select>
+        <div class="bk-error" id="err2">Please fill in all schedule fields.</div>
+        <button class="bk-btn-main" onclick="goStep(3)">Continue →</button>
+        <button class="bk-btn-back" onclick="goStep(1)">← Back</button>
+      </div>
+
+      <!-- STEP 3: Contact -->
+      <div class="step-panel" id="step3">
+        <h3 class="step-title">Your contact info</h3>
+        <p class="step-sub">So we can confirm your booking and reach you day-of.</p>
+        <div class="row2">
+          <div><label class="bk-label">First Name</label><input class="bk-input" type="text" id="fname" placeholder="Sarah" /></div>
+          <div><label class="bk-label">Last Name</label><input class="bk-input" type="text" id="lname" placeholder="Johnson" /></div>
+        </div>
+        <label class="bk-label">Phone Number</label>
+        <input class="bk-input" type="tel" id="phone" placeholder="(404) 555-0100" />
+        <label class="bk-label">Email Address</label>
+        <input class="bk-input" type="email" id="email" placeholder="sarah@email.com" />
+        <label class="bk-label">Do you have pets?</label>
+        <select class="bk-select" id="haspets">
+          <option value="">-- Select --</option>
+          <option>Yes — dogs</option>
+          <option>Yes — cats</option>
+          <option>Yes — dogs & cats</option>
+          <option>Yes — other</option>
+          <option>No pets</option>
+        </select>
+        <div class="bk-error" id="err3">Please fill in all required fields.</div>
+        <button class="bk-btn-main" onclick="goStep(4)">Continue →</button>
+        <button class="bk-btn-back" onclick="goStep(2)">← Back</button>
+      </div>
+
+      <!-- STEP 4: Address + ETA -->
+      <div class="step-panel" id="step4">
+        <h3 class="step-title">Where are you located?</h3>
+        <p class="step-sub">Enter your address and we'll calculate your estimated arrival time from our location on River Rd.</p>
+        <label class="bk-label">Street Address</label>
+        <input class="bk-input" type="text" id="addr-street" placeholder="e.g. 1500 Memorial Drive SE" />
+        <div class="row2">
+          <div><label class="bk-label">City</label><input class="bk-input" type="text" id="addr-city" placeholder="Decatur" /></div>
+          <div><label class="bk-label">ZIP Code</label><input class="bk-input" type="text" id="addr-zip" placeholder="30032" /></div>
+        </div>
+        <div class="bk-error" id="err4">Please enter your full address.</div>
+        <div class="zone-warn" id="zone-warn">⚠️ This address may be outside our current service area (Fairview Rec Center, Decatur to River Trail near Gresham Park). We'll confirm availability when we reach out.</div>
+        <div class="eta-box" id="eta-box" style="display:none">
+          <h4>📍 Estimated Arrival Time</h4>
+          <div class="eta-main" id="eta-display">—</div>
+          <div class="eta-sub" id="eta-sub">From our location on River Rd · Traffic may vary</div>
+        </div>
+        <button class="bk-btn-main" id="eta-btn" onclick="calcETA()">Check Arrival Time & Continue →</button>
+        <button class="bk-btn-back" onclick="goStep(3)">← Back</button>
+      </div>
+
+      <!-- STEP 5: Confirmation -->
+      <div class="step-panel" id="step5">
+        <div class="confirm-icon">🎉</div>
+        <h3 class="step-title" style="text-align:center">Booking Request Sent!</h3>
+        <p class="step-sub" style="text-align:center;margin-bottom:1.5rem">We'll reach out to confirm within a few hours. Here's your summary:</p>
+        <div id="summary"></div>
+        <div class="eta-box" id="confirm-eta" style="margin-top:1rem;display:none">
+          <h4>📍 Estimated Arrival</h4>
+          <div class="eta-main" id="confirm-eta-val">—</div>
+          <div class="eta-sub">From River Rd to your address on your scheduled date</div>
+        </div>
+        <button class="bk-btn-main" style="margin-top:1.5rem" onclick="closeBooking()">Close</button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     JAVASCRIPT
+════════════════════════════════════════ -->
+<script>
+  /* ─ Modal ─ */
+  function openBooking() {
+    document.getElementById('modal').classList.add('open');
+    document.body.style.overflow = 'hidden';
+    resetBooking();
+  }
+  function closeBooking() {
+    document.getElementById('modal').classList.remove('open');
+    document.body.style.overflow = '';
+  }
+  function handleOverlayClick(e) {
+    if (e.target === document.getElementById('modal')) closeBooking();
+  }
+  document.addEventListener('keydown', function(e){ if(e.key==='Escape') closeBooking(); });
+
+  /* ─ Services ─ */
+  const selectedServices = [];
+  function toggleSvc(btn, name) {
+    const idx = selectedServices.indexOf(name);
+    if (idx > -1) { selectedServices.splice(idx, 1); btn.classList.remove('selected'); }
+    else { selectedServices.push(name); btn.classList.add('selected'); }
+  }
+
+  /* ─ Date min ─ */
+  (function setMinDate(){
+    const d = new Date(); d.setDate(d.getDate() + 1);
+    document.getElementById('bk-date').min = d.toISOString().split('T')[0];
+  })();
+
+  /* ─ Progress ─ */
+  function updateProgress(step) {
+    for (let i = 1; i <= 5; i++) {
+      const dot = document.getElementById('dot'+i);
+      const lbl = document.getElementById('lbl'+i);
+      if (i < step) {
+        dot.className = 'bk-step-dot done'; dot.textContent = '✓'; lbl.className = 'bk-step-label';
+      } else if (i === step) {
+        dot.className = 'bk-step-dot active'; dot.textContent = i===5?'✓':i; lbl.className = 'bk-step-label active-label';
+      } else {
+        dot.className = 'bk-step-dot todo'; dot.textContent = i===5?'✓':i; lbl.className = 'bk-step-label';
+      }
+    }
+    if (step === 5) { const d=document.getElementById('dot5'); d.className='bk-step-dot done'; d.textContent='✓'; }
+  }
+
+  /* ─ Step navigation ─ */
+  function goStep(n) {
+    if (n === 2) {
+      if (selectedServices.length === 0) { document.getElementById('err1').style.display='block'; return; }
+      document.getElementById('err1').style.display = 'none';
+    }
+    if (n === 3) {
+      const d=document.getElementById('bk-date').value, t=document.getElementById('bk-time').value, f=document.getElementById('bk-freq').value;
+      if (!d || !t || !f) { document.getElementById('err2').style.display='block'; return; }
+      document.getElementById('err2').style.display = 'none';
+    }
+    if (n === 4) {
+      const fn=document.getElementById('fname').value.trim(), ln=document.getElementById('lname').value.trim();
+      const ph=document.getElementById('phone').value.trim(), em=document.getElementById('email').value.trim();
+      if (!fn||!ln||!ph||!em) { document.getElementById('err3').style.display='block'; return; }
+      document.getElementById('err3').style.display = 'none';
+    }
+    if (n === 5) buildSummary();
+    for (let i = 1; i <= 5; i++) {
+      document.getElementById('step'+i).className = 'step-panel' + (i===n?' visible':'');
+    }
+    updateProgress(n);
+    document.getElementById('modal-box').scrollTop = 0;
+  }
+
+  /* ─ ETA Calculation ─ */
+  async function calcETA() {
+    const street = document.getElementById('addr-street').value.trim();
+    const city   = document.getElementById('addr-city').value.trim();
+    const zip    = document.getElementById('addr-zip').value.trim();
+    if (!street || !city || !zip) { document.getElementById('err4').style.display='block'; return; }
+    document.getElementById('err4').style.display = 'none';
+
+    const btn = document.getElementById('eta-btn');
+    btn.textContent = 'Calculating arrival time...';
+    btn.disabled = true;
+
+    /* Your home on River Rd — adjust the full address below if needed */
+    const originAddr = encodeURIComponent('River Rd, Atlanta, GA 30316');
+    const destAddr   = encodeURIComponent(`${street}, ${city}, GA ${zip}`);
+
+    try {
+      const [geoO, geoD] = await Promise.all([
+        fetch(`https://nominatim.openstreetmap.org/search?q=${originAddr}&format=json&limit=1`).then(r=>r.json()),
+        fetch(`https://nominatim.openstreetmap.org/search?q=${destAddr}&format=json&limit=1`).then(r=>r.json())
+      ]);
+
+      if (!geoO.length || !geoD.length) throw new Error('geocode failed');
+
+      const oLat=parseFloat(geoO[0].lat), oLon=parseFloat(geoO[0].lon);
+      const dLat=parseFloat(geoD[0].lat), dLon=parseFloat(geoD[0].lon);
+
+      const route = await fetch(
+        `https://router.project-osrm.org/route/v1/driving/${oLon},${oLat};${dLon},${dLat}?overview=false`
+      ).then(r=>r.json());
+
+      const mins = Math.round(route.routes[0].duration / 60);
+
+      /* Service zone check:
+         West boundary:  N.H. Scott Rec (Fairview area) ~33.748°N, -84.298°W
+         East boundary:  River Trail at Gresham Park    ~33.694°N, -84.313°W
+         Expanded bounding box to cover the full corridor */
+      const inZone = dLat >= 33.67 && dLat <= 33.80 && dLon >= -84.36 && dLon <= -84.25;
+      document.getElementById('zone-warn').style.display = inZone ? 'none' : 'block';
+
+      const arrivalTime = addMinutes(document.getElementById('bk-time').value, mins);
+      window._etaText   = `~${mins} min drive · Arrive around ${arrivalTime}`;
+      window._destFull  = `${street}, ${city}, GA ${zip}`;
+
+      document.getElementById('eta-display').textContent = `~${mins} min`;
+      document.getElementById('eta-sub').textContent     = `From River Rd → arriving around ${arrivalTime} · Traffic may vary`;
+      document.getElementById('eta-box').style.display   = 'block';
+
+      btn.textContent = 'Looks good — Submit Booking →';
+      btn.disabled    = false;
+      btn.onclick     = () => goStep(5);
+
+    } catch(e) {
+      document.getElementById('eta-display').textContent = 'Unable to calculate';
+      document.getElementById('eta-sub').textContent     = "We'll confirm your exact arrival time when we reach out.";
+      document.getElementById('eta-box').style.display   = 'block';
+      window._etaText  = 'To be confirmed';
+      window._destFull = `${street}, ${city}, GA ${zip}`;
+
+      btn.textContent = 'Submit Booking →';
+      btn.disabled    = false;
+      btn.onclick     = () => goStep(5);
+    }
+  }
+
+  function addMinutes(timeStr, addMins) {
+    if (!timeStr) return '—';
+    const [time, period] = timeStr.split(' ');
+    let [h, m] = time.split(':').map(Number);
+    if (period==='PM' && h!==12) h += 12;
+    if (period==='AM' && h===12) h = 0;
+    let total = h*60 + m + addMins;
+    let nh = Math.floor(total/60)%24, nm = total%60;
+    const ap = nh>=12 ? 'PM' : 'AM';
+    if (nh>12) nh-=12; if (nh===0) nh=12;
+    return `${nh}:${nm.toString().padStart(2,'0')} ${ap}`;
+  }
+
+  /* ─ Build summary ─ */
+  function buildSummary() {
+    const rows = [
+      ['Services',   selectedServices.join(', ')],
+      ['Date',       document.getElementById('bk-date').value],
+      ['Time',       document.getElementById('bk-time').value],
+      ['Frequency',  document.getElementById('bk-freq').value],
+      ['Name',       `${document.getElementById('fname').value} ${document.getElementById('lname').value}`],
+      ['Phone',      document.getElementById('phone').value],
+      ['Email',      document.getElementById('email').value],
+      ['Pets',       document.getElementById('haspets').value],
+      ['Address',    window._destFull || '—'],
+    ];
+    const notes = document.getElementById('notes').value.trim();
+    if (notes) rows.push(['Notes', notes]);
+
+    document.getElementById('summary').innerHTML = rows.map(([k,v]) =>
+      `<div class="summary-row"><span class="summary-key">${k}</span><span class="summary-val">${v||'—'}</span></div>`
+    ).join('');
+
+    if (window._etaText) {
+      document.getElementById('confirm-eta').style.display = 'block';
+      document.getElementById('confirm-eta-val').textContent = window._etaText;
+    }
+  }
+
+  /* ─ Reset ─ */
+  function resetBooking() {
+    selectedServices.length = 0;
+    document.querySelectorAll('.svc-btn').forEach(b => b.classList.remove('selected'));
+    ['notes','bk-date','bk-time','bk-freq','fname','lname','phone','email','haspets','addr-street','addr-city','addr-zip']
+      .forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+    document.getElementById('eta-box').style.display    = 'none';
+    document.getElementById('zone-warn').style.display  = 'none';
+    document.getElementById('confirm-eta').style.display= 'none';
+    document.querySelectorAll('.bk-error').forEach(e => e.style.display='none');
+    const btn = document.getElementById('eta-btn');
+    btn.textContent = 'Check Arrival Time & Continue →';
+    btn.disabled    = false;
+    btn.onclick     = calcETA;
+    window._etaText = null; window._destFull = null;
+    goStep(1);
+  }
+</script>
+</body>
+</html>
