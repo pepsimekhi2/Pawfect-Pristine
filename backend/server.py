@@ -20,6 +20,9 @@ from auth_utils import (
     hash_password, verify_password, create_access_token, decode_token, extract_token
 )
 from pricing import compute_quote, get_public_catalog, SERVICE_CATALOG
+from tos import TOS_TEXT, TOS_VERSION, TOS_EFFECTIVE
+import firebase_sync as fb
+import asyncio
 
 mongo_url = os.environ['MONGO_URL']
 mongo_client = AsyncIOMotorClient(mongo_url)
@@ -205,7 +208,7 @@ def _to_user_out(user: dict) -> UserOut:
 async def register(payload: RegisterPayload, request: Request, response: Response):
     if len(payload.password) < 8:
         raise HTTPException(status_code=400, detail="Password must be at least 8 characters.")
-    if not re.match(r"^[A-Za-z\s'\-]{2,80}$", payload.name.strip()):
+    if not re.match(r"^[A-Za-z0-9\s'\-\.]{2,80}$", payload.name.strip()):
         raise HTTPException(status_code=400, detail="Please enter a valid name.")
 
     email = payload.email.lower().strip()
@@ -223,6 +226,10 @@ async def register(payload: RegisterPayload, request: Request, response: Respons
         "created_at": datetime.now(timezone.utc),
     }
     await db.users.insert_one(user_doc)
+    # Best-effort Firebase mirror
+    asyncio.create_task(fb.put(f"users/{user_doc['id']}", fb.safe_serializable({
+        **user_doc, "password_hash": None,
+    })))
     token = create_access_token(user_doc["id"], email)
     response.set_cookie(key="access_token", value=token, httponly=True, secure=False, samesite="lax",
                         max_age=60 * 60 * 24 * 7, path="/")
@@ -399,6 +406,18 @@ async def create_booking(payload: BookingCreate, request: Request):
 
     await db.bookings.insert_one(booking)
 
+    # Best-effort Firebase mirror — never blocks
+    asyncio.create_task(fb.put(f"bookings/{booking['id']}", fb.safe_serializable(booking)))
+    if booking["user_id"]:
+        asyncio.create_task(fb.put(
+            f"user_bookings/{booking['user_id']}/{booking['id']}",
+            fb.safe_serializable({k: booking[k] for k in (
+                "id", "service_label", "tier_label", "preferred_date", "preferred_time",
+                "status", "grand_total", "due_now", "due_later", "payment_status",
+                "payment_plan", "payment_method", "created_at",
+            )}),
+        ))
+
     return {
         "id": booking["id"],
         "sms_sent": booking["sms_sent"],
@@ -415,6 +434,43 @@ async def create_booking(payload: BookingCreate, request: Request):
 async def my_bookings(user: dict = Depends(get_current_user)):
     docs = await db.bookings.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(200)
     return docs
+
+
+@api_router.get("/bookings/upcoming")
+async def upcoming_bookings(user: dict = Depends(get_current_user)):
+    """Bookings with preferred_date >= today AND status != cancelled."""
+    today = datetime.now(timezone.utc).date().isoformat()
+    docs = await db.bookings.find(
+        {"user_id": user["id"], "status": {"$ne": "cancelled"}, "preferred_date": {"$gte": today}},
+        {"_id": 0},
+    ).sort("preferred_date", 1).to_list(200)
+    return docs
+
+
+@api_router.post("/bookings/{booking_id}/cancel")
+async def cancel_booking(booking_id: str, user: dict = Depends(get_current_user)):
+    booking = await db.bookings.find_one({"id": booking_id, "user_id": user["id"]})
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found.")
+    if booking.get("status") == "cancelled":
+        return {"ok": True, "status": "cancelled"}
+    await db.bookings.update_one(
+        {"id": booking_id},
+        {"$set": {"status": "cancelled", "cancelled_at": datetime.now(timezone.utc).isoformat()}},
+    )
+    asyncio.create_task(fb.patch(f"bookings/{booking_id}", {"status": "cancelled"}))
+    asyncio.create_task(fb.patch(f"user_bookings/{user['id']}/{booking_id}", {"status": "cancelled"}))
+    return {"ok": True, "status": "cancelled"}
+
+
+@api_router.get("/tos")
+async def get_tos():
+    return {"version": TOS_VERSION, "effective": TOS_EFFECTIVE, "text": TOS_TEXT}
+
+
+@api_router.get("/firebase/status")
+async def firebase_status():
+    return {"enabled": fb.enabled(), "db_url": fb.FIREBASE_DB_URL if fb.enabled() else None}
 
 
 @api_router.get("/bookings/recent")

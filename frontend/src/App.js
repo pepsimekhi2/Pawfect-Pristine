@@ -1,9 +1,16 @@
 import React from "react";
+import { Routes, Route, Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Phone, Mail, MapPin, Calendar, Check } from "lucide-react";
 import { PrimaryButton, OutlineButton, GhostWhiteButton } from "./components/ui-kit";
 import EtaCalculator from "./components/EtaCalculator";
-import BookingForm from "./components/BookingForm";
+import HeaderAuth from "./components/HeaderAuth";
+import LoginPage from "./pages/LoginPage";
+import SignupPage from "./pages/SignupPage";
+import DashboardPage from "./pages/DashboardPage";
+import BookPage from "./pages/BookPage";
+import TosPage from "./pages/TosPage";
+import RequireAuth from "./components/RequireAuth";
 import "./App.css";
 
 const IMG = {
@@ -54,7 +61,7 @@ const rise = {
 
 function Logo({ onDark = false }) {
   return (
-    <a href="#top" className="flex items-center gap-2.5" data-testid="brand-logo">
+    <Link to="/" className="flex items-center gap-2.5" data-testid="brand-logo">
       <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: onDark ? "var(--green-pale)" : "var(--green)", color: onDark ? "var(--green-dark)" : "#fff" }}>
         <span className="text-lg leading-none">🐾</span>
       </div>
@@ -62,7 +69,7 @@ function Logo({ onDark = false }) {
         <span className="font-serif text-[18px] font-bold" style={{ color: onDark ? "#c8e8d8" : "var(--green-dark)" }}>Pawfect &amp; Pristine</span>
         <span className="text-[9px] uppercase tracking-[0.18em] font-medium" style={{ color: onDark ? "var(--green-pale)" : "var(--green-muted)" }}>Home & Pet Services</span>
       </div>
-    </a>
+    </Link>
   );
 }
 
@@ -76,7 +83,7 @@ function Nav() {
         <a href="#eta" className="link-underline" data-testid="nav-eta">ETA</a>
         <a href="#reviews" className="link-underline" data-testid="nav-reviews">Reviews</a>
       </div>
-      <a href="#book" data-testid="header-book-cta"><PrimaryButton testid="header-book-btn">Book a Visit</PrimaryButton></a>
+      <HeaderAuth />
     </nav>
   );
 }
@@ -100,7 +107,7 @@ function Hero() {
             A clean home and a happy pet makes a better day — every single day. We handle the scrubbing and the snuggling so you don&rsquo;t have to.
           </motion.p>
           <motion.div {...rise} transition={{ ...rise.transition, delay: 0.15 }} className="flex flex-wrap gap-3 mt-8">
-            <a href="#book" data-testid="hero-book-cta"><PrimaryButton testid="hero-book-btn">Book a Visit</PrimaryButton></a>
+            <Link to="/book" data-testid="hero-book-cta"><PrimaryButton testid="hero-book-btn">Book a Visit</PrimaryButton></Link>
             <a href="#services" data-testid="hero-services-cta"><OutlineButton testid="hero-services-btn">Our Services</OutlineButton></a>
           </motion.div>
         </div>
@@ -157,21 +164,21 @@ function Services() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
           {SERVICES.map((s, i) => (
-            <motion.a
-              href="#book"
+            <motion.div
               key={s.value}
               data-testid={`service-card-${s.value}`}
               initial={{ opacity: 0, y: 24 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, amount: 0.15 }}
               transition={{ delay: i * 0.04, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-              className="card-clean group"
             >
-              <div className={`svc-icon ${s.iconClass} transition-transform group-hover:scale-110`}>{s.emoji}</div>
-              <h3 className="mt-4 font-semibold text-[15px] text-[var(--text)]">{s.label}</h3>
-              <p className="mt-2 text-[13px] leading-[1.6] text-[var(--text-muted)]">{s.desc}</p>
-              <span className={`tag ${s.cat === "Home" ? "tag-home" : "tag-pet"} mt-4`}>{s.cat}</span>
-            </motion.a>
+              <Link to="/book" className="card-clean group block">
+                <div className={`svc-icon ${s.iconClass} transition-transform group-hover:scale-110`}>{s.emoji}</div>
+                <h3 className="mt-4 font-semibold text-[15px] text-[var(--text)]">{s.label}</h3>
+                <p className="mt-2 text-[13px] leading-[1.6] text-[var(--text-muted)]">{s.desc}</p>
+                <span className={`tag ${s.cat === "Home" ? "tag-home" : "tag-pet"} mt-4`}>{s.cat}</span>
+              </Link>
+            </motion.div>
           ))}
         </div>
       </div>
@@ -205,7 +212,7 @@ function SplitHome() {
             ))}
           </ul>
           <div className="mt-7">
-            <a href="#book"><PrimaryButton testid="split-book-btn">Book a Cleaning Visit</PrimaryButton></a>
+            <Link to="/book"><PrimaryButton testid="split-book-btn">Book a Cleaning Visit</PrimaryButton></Link>
           </div>
         </motion.div>
       </div>
@@ -328,11 +335,11 @@ function FinalCTA() {
           Book your first visit today — no contracts, no stress. Just a cleaner home and a pet who can&rsquo;t wait for us to come back.
         </p>
         <div className="mt-7 flex flex-wrap gap-3 justify-center">
-          <a href="#book" data-testid="cta-book">
+          <Link to="/book" data-testid="cta-book">
             <motion.button whileHover={{ y: -1 }} whileTap={{ scale: 0.97 }} className="btn-white">
               Book a Visit
             </motion.button>
-          </a>
+          </Link>
           <a href="#services" data-testid="cta-services"><GhostWhiteButton>View Services</GhostWhiteButton></a>
         </div>
       </div>
@@ -368,9 +375,10 @@ function Footer() {
           <h4 className="text-[12px] font-semibold uppercase tracking-[0.12em] text-[#7aaa90]">Contact</h4>
           <ul className="mt-4 space-y-2.5 text-[13px] text-[#6b8878]">
             <li><a href="tel:+14703814682" className="flex items-center gap-2 hover:text-[var(--green-pale)] transition-colors"><Phone size={14} /> (470) 381-4682</a></li>
-            <li><a href="mailto:hello@pawfectpristine.local" className="flex items-center gap-2 hover:text-[var(--green-pale)] transition-colors"><Mail size={14} /> hello@pawfectpristine.local</a></li>
+            <li><a href="mailto:hello@pawfectpristine.com" className="flex items-center gap-2 hover:text-[var(--green-pale)] transition-colors"><Mail size={14} /> hello@pawfectpristine.com</a></li>
             <li className="flex items-center gap-2"><MapPin size={14} /> Decatur · East Atlanta</li>
-            <li><a href="#book" className="flex items-center gap-2 hover:text-[var(--green-pale)] transition-colors"><Calendar size={14} /> Book a Visit</a></li>
+            <li><Link to="/book" className="flex items-center gap-2 hover:text-[var(--green-pale)] transition-colors"><Calendar size={14} /> Book a Visit</Link></li>
+            <li><Link to="/tos" className="flex items-center gap-2 hover:text-[var(--green-pale)] transition-colors" data-testid="footer-tos">Terms of Service</Link></li>
           </ul>
         </div>
       </div>
@@ -384,7 +392,7 @@ function Footer() {
   );
 }
 
-export default function App() {
+function HomePage() {
   return (
     <div className="App font-sans">
       <Nav />
@@ -396,10 +404,23 @@ export default function App() {
         <Stats />
         <EtaCalculator />
         <Testimonials />
-        <BookingForm />
         <FinalCTA />
       </main>
       <Footer />
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <Routes>
+      <Route path="/" element={<HomePage />} />
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/signup" element={<SignupPage />} />
+      <Route path="/book" element={<BookPage />} />
+      <Route path="/tos" element={<TosPage />} />
+      <Route path="/dashboard" element={<RequireAuth><DashboardPage /></RequireAuth>} />
+      <Route path="*" element={<HomePage />} />
+    </Routes>
   );
 }
