@@ -75,21 +75,8 @@ SERVICE_CATALOG = {
         "has_tiers": True,
         "tier_question": "What kind of stay?",
         "tiers": {
-            "dropin":    {"label": "Drop-in (30 min)", "price": 12, "duration": 30,  "desc": "Feed, water, snuggle."},
-            "halfday":   {"label": "Half day",         "price": 30, "duration": 240, "desc": "Up to 4 hours of company."},
-            "overnight": {"label": "Overnight (12 hr)","price": 55, "duration": 720, "desc": "We stay over so they don't feel alone."},
-        },
-    },
-    "feeding_care": {
-        "label": "Feeding & Care",
-        "category": "pet",
-        "icon": "🍽️",
-        "has_tiers": True,
-        "tier_question": "How many visits?",
-        "tiers": {
-            "1": {"label": "1 visit",       "price": 10, "duration": 30, "desc": "Single drop-in for meals/meds."},
-            "2": {"label": "2 visits / day","price": 18, "duration": 30, "desc": "Morning + evening."},
-            "3": {"label": "3 visits / day","price": 28, "duration": 30, "desc": "Full day coverage."},
+            "dropin":  {"label": "Drop-in (30 min)", "price": 12, "duration": 30,  "desc": "Feed, water, snuggle."},
+            "halfday": {"label": "Half day",         "price": 30, "duration": 240, "desc": "Up to 4 hours of company."},
         },
     },
     "playtime": {
@@ -119,27 +106,17 @@ BOOKING_TIME_MAX = "18:30"
 
 # Add-ons grouped by which service category they apply to.
 CLEANING_ADDONS = [
-    {"key": "inside_fridge", "label": "Inside the fridge",         "price": 25, "icon": "🧊", "desc": "Empty, scrub, and disinfect."},
-    {"key": "inside_oven",   "label": "Inside the oven",           "price": 20, "icon": "🔥", "desc": "Degrease racks + walls."},
-    {"key": "baseboards",    "label": "Baseboards detail",         "price": 15, "icon": "📐", "desc": "Hand-wiped, dust-free."},
-    {"key": "int_windows",   "label": "Interior windows",          "price": 20, "icon": "🪟", "desc": "Streak-free shine, sills wiped."},
-    {"key": "cabinet_fronts","label": "Cabinet fronts",            "price": 18, "icon": "🚪", "desc": "Degrease + polish handles."},
-    {"key": "pet_hair",      "label": "Heavy pet hair / dander",   "price": 12, "icon": "🐾", "desc": "Extra vacuum & lint-roll."},
-    {"key": "smoker",        "label": "Smoker household",          "price": 15, "icon": "💨", "desc": "Deep deodorize + fabric mist."},
-    {"key": "laundry",       "label": "Laundry (per load)",        "price": 10, "icon": "🧺", "desc": "Wash, dry, fold."},
-    {"key": "dishes",        "label": "Pile of dishes",            "price": 12, "icon": "🍽️", "desc": "We'll knock 'em out."},
-    {"key": "linens",        "label": "Change all bed linens",     "price": 10, "icon": "🛏️", "desc": "Strip, remake, hospital corners."},
-    {"key": "move_in_out",   "label": "Move-in / Move-out clean",  "price": 50, "icon": "📦", "desc": "Floor-to-ceiling, every closet."},
+    {"key": "baseboards",  "label": "Baseboard detailing",   "price": 15, "icon": "📐", "desc": "Hand-wiped, dust-free."},
+    {"key": "int_windows", "label": "Window cleaning",       "price": 20, "icon": "🪟", "desc": "Streak-free shine, sills wiped."},
+    {"key": "dishes",      "label": "Dishwashing",           "price": 12, "icon": "🍽️", "desc": "We'll knock 'em out."},
+    {"key": "laundry",     "label": "Laundry (per load)",    "price": 10, "icon": "🧺", "desc": "Wash, dry, fold."},
+    {"key": "move_in_out", "label": "Move in / Move out",    "price": 50, "icon": "📦", "desc": "Floor-to-ceiling, every closet."},
 ]
 
 PET_ADDONS = [
-    {"key": "meds",       "label": "Medication administration", "price": 5, "icon": "💊", "desc": "Pills, drops, injections (you supply)."},
-    {"key": "photos",     "label": "Photo updates during visit","price": 3, "icon": "📸", "desc": "We text 3-5 cute pics."},
-    {"key": "plants",     "label": "Water indoor plants",       "price": 5, "icon": "🪴", "desc": "Up to 10 plants."},
-    {"key": "mail",       "label": "Bring in mail & packages",  "price": 5, "icon": "📬", "desc": "Stack neatly inside the door."},
-    {"key": "litter",     "label": "Full litter-box change",    "price": 5, "icon": "🧴", "desc": "Empty, scrub, refill."},
-    {"key": "bath",       "label": "Bath / quick groom",        "price": 18,"icon": "🛁", "desc": "Add to a walk or sitting visit."},
-    {"key": "extra_treats","label": "Special treats / training","price": 4, "icon": "🦴", "desc": "Reinforcement, you supply treats."},
+    {"key": "photos", "label": "Photo updates",   "price": 3, "icon": "📸", "desc": "We text 3-5 cute pics during the visit."},
+    {"key": "plants", "label": "Water the plants","price": 5, "icon": "🪴", "desc": "Indoor or outdoor — you provide the watering can."},
+    {"key": "mail",   "label": "Bring in mail",   "price": 5, "icon": "📬", "desc": "Mail & packages stacked inside the door."},
 ]
 
 # Property type options — only shown for cleaning category services.

@@ -229,3 +229,27 @@ User uploaded a static HTML landing page (`pawfect-and-pristine.html`) for a loc
 - `move_in_out` add-on is only surfaced on general/deep cleaning services.
 - Backend regression suite at `backend/tests/test_iteration_3.py`
   (11 tests, ~1s) covers all the math + persistence + visibility rules.
+
+
+---
+
+## v1.5.1 — Trim catalog + compact upsell layout (2026-02-14)
+
+### Catalog edits
+- **Removed services**: `feeding_care` (temporarily not offered).
+- **Removed tier**: `pet_sitting.overnight` (12-hour sleepover) — owner can
+  re-add to `pricing.py` if they want it back.
+- **Cleaning add-ons trimmed to 5**:
+  Baseboard Detailing · Window Cleaning · Dishwashing · Laundry · Move-in/out.
+  Removed: inside_fridge, inside_oven, cabinet_fronts, pet_hair, smoker, linens.
+- **Pet add-ons trimmed to 3**:
+  Photo Updates · Water the plants (note: customer provides watering can) ·
+  Bring in mail. Removed: meds, litter, bath, extra_treats.
+
+### Layout
+- UpsellPanel restructured into 3 rows (was 5):
+  1. **Top row** — property type pills + bedroom/bath counters side-by-side.
+  2. **Middle row** — addons in a compact grid (auto-fit minmax(150px, 1fr)).
+  3. **Bottom row** — discount card + running-total chip side-by-side.
+- Tile padding reduced (`14px` → `11px`), badges shrunk, fonts trimmed by ~1-2px.
+- Total step-1 page height: **~1688px** at 1280px wide (was ~2500px).

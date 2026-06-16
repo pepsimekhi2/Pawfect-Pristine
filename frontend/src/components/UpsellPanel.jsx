@@ -1,6 +1,6 @@
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Minus, Check, Sparkles, Tag } from "lucide-react";
+import { Plus, Minus, Check, Tag } from "lucide-react";
 
 /**
  * UpsellPanel — the per-service questionnaire. Renders conditionally based on
@@ -32,108 +32,102 @@ export default function UpsellPanel({
 
   return (
     <div className="upsell-panel" data-testid="upsell-panel">
-      <div className="upsell-head">
-        <Sparkles size={14} className="text-[var(--green)]" />
-        <span className="eyebrow !mt-0">Customize · Tap to add</span>
-      </div>
-
-      {/* Property type — cleaning only */}
-      {isHome && upsells.property_types?.length > 0 && (
-        <Section title="Where are we cleaning?">
-          <div className="grid grid-cols-3 gap-2.5" data-testid="property-type-row">
-            {upsells.property_types.map((pt, i) => (
-              <Tile
-                key={pt.key}
-                selected={propertyType === pt.key}
-                onClick={() => setPropertyType(pt.key)}
-                testid={`property-${pt.key}`}
-                badge={pt.badge}
-                delay={i * 0.04}
-              >
-                <div className="text-[22px] leading-none mb-1.5">{pt.icon}</div>
-                <div className="font-semibold text-[12.5px] leading-tight">{pt.label}</div>
-              </Tile>
-            ))}
-          </div>
-        </Section>
+      {/* Top row: property type + room counts side-by-side on desktop */}
+      {(isHome || isPet) && (
+        <div className="upsell-toprow">
+          {isHome && upsells.property_types?.length > 0 && (
+            <div className="flex-1">
+              <SubHead>Where</SubHead>
+              <div className="property-pills" data-testid="property-type-row">
+                {upsells.property_types.map((pt, i) => (
+                  <PillTile
+                    key={pt.key}
+                    selected={propertyType === pt.key}
+                    onClick={() => setPropertyType(pt.key)}
+                    testid={`property-${pt.key}`}
+                    badge={pt.badge}
+                    icon={pt.icon}
+                    label={pt.label}
+                    delay={i * 0.04}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+          {isHome && upsells.room_questions && (
+            <div className="flex-1 grid grid-cols-2 gap-2.5">
+              <Counter
+                testid="bedrooms-counter"
+                icon={upsells.room_questions.bedrooms?.icon}
+                label="Bedrooms"
+                value={bedrooms}
+                setValue={setBedrooms}
+                min={upsells.room_questions.bedrooms?.min ?? 0}
+                max={upsells.room_questions.bedrooms?.max ?? 10}
+                priceEach={upsells.room_questions.bedrooms?.price_each}
+                freeUnits={upsells.room_questions.bedrooms?.free_units}
+              />
+              <Counter
+                testid="bathrooms-counter"
+                icon={upsells.room_questions.bathrooms?.icon}
+                label="Baths"
+                value={bathrooms}
+                setValue={setBathrooms}
+                min={upsells.room_questions.bathrooms?.min ?? 1}
+                max={upsells.room_questions.bathrooms?.max ?? 8}
+                priceEach={upsells.room_questions.bathrooms?.price_each}
+                freeUnits={upsells.room_questions.bathrooms?.free_units}
+              />
+            </div>
+          )}
+          {isPet && upsells.pet_question && (
+            <div className="flex-1 max-w-xs">
+              <SubHead>{upsells.pet_question.label}</SubHead>
+              <Counter
+                testid="pet-counter"
+                icon={upsells.pet_question.icon}
+                label="Pets"
+                value={petCount}
+                setValue={setPetCount}
+                min={upsells.pet_question.min ?? 1}
+                max={upsells.pet_question.max ?? 8}
+                priceEach={upsells.pet_question.price_each}
+                freeUnits={upsells.pet_question.free_units}
+              />
+            </div>
+          )}
+        </div>
       )}
 
-      {/* Room counts — cleaning only */}
-      {isHome && upsells.room_questions && (
-        <Section title="How big is the space?">
-          <div className="grid grid-cols-2 gap-3" data-testid="room-counts">
-            <Counter
-              testid="bedrooms-counter"
-              icon={upsells.room_questions.bedrooms?.icon}
-              label={upsells.room_questions.bedrooms?.label}
-              value={bedrooms}
-              setValue={setBedrooms}
-              min={upsells.room_questions.bedrooms?.min ?? 0}
-              max={upsells.room_questions.bedrooms?.max ?? 10}
-              priceEach={upsells.room_questions.bedrooms?.price_each}
-              freeUnits={upsells.room_questions.bedrooms?.free_units}
-            />
-            <Counter
-              testid="bathrooms-counter"
-              icon={upsells.room_questions.bathrooms?.icon}
-              label={upsells.room_questions.bathrooms?.label}
-              value={bathrooms}
-              setValue={setBathrooms}
-              min={upsells.room_questions.bathrooms?.min ?? 1}
-              max={upsells.room_questions.bathrooms?.max ?? 8}
-              priceEach={upsells.room_questions.bathrooms?.price_each}
-              freeUnits={upsells.room_questions.bathrooms?.free_units}
-            />
-          </div>
-        </Section>
-      )}
-
-      {/* Pet count — pet services only */}
-      {isPet && upsells.pet_question && (
-        <Section title={upsells.pet_question.label}>
-          <Counter
-            testid="pet-counter"
-            icon={upsells.pet_question.icon}
-            label="Pets"
-            value={petCount}
-            setValue={setPetCount}
-            min={upsells.pet_question.min ?? 1}
-            max={upsells.pet_question.max ?? 8}
-            priceEach={upsells.pet_question.price_each}
-            freeUnits={upsells.pet_question.free_units}
-          />
-        </Section>
-      )}
-
-      {/* Add-ons */}
+      {/* Add-ons grid */}
       {upsells.addons?.length > 0 && (
-        <Section title={isHome ? "Add-ons" : "Extras"}>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5" data-testid="addons-grid">
+        <div>
+          <SubHead>{isHome ? "Add-ons" : "Extras"} <span className="opacity-60 normal-case font-normal text-[10.5px]">tap to add</span></SubHead>
+          <div className="addons-row" data-testid="addons-grid">
             {upsells.addons.map((a, i) => {
               const sel = addons.includes(a.key);
               return (
-                <Tile
+                <CompactAddonTile
                   key={a.key}
                   selected={sel}
                   onClick={() => toggleAddon(a.key)}
                   testid={`addon-${a.key}`}
                   badge={`+$${a.price}`}
+                  icon={a.icon}
+                  label={a.label}
+                  desc={a.desc}
                   delay={i * 0.03}
-                >
-                  <div className="text-[20px] leading-none mb-1">{a.icon}</div>
-                  <div className="font-semibold text-[12.5px] leading-tight">{a.label}</div>
-                  <div className="text-[10.5px] text-[var(--text-muted)] mt-1 leading-tight">{a.desc}</div>
-                </Tile>
+                />
               );
             })}
           </div>
-        </Section>
+        </div>
       )}
 
-      {/* Discounts */}
-      {upsells.discounts?.length > 0 && (
-        <Section title="Save money">
-          <div className="grid gap-2.5" data-testid="discount-grid">
+      {/* Discount + Live total — side by side on desktop */}
+      <div className="upsell-bottomrow">
+        {upsells.discounts?.length > 0 && (
+          <div className="flex-1" data-testid="discount-grid">
             {upsells.discounts.map((d, i) => {
               const sel = discounts.includes(d.key);
               return (
@@ -147,62 +141,56 @@ export default function UpsellPanel({
                   data-testid={`discount-${d.key}`}
                   className={`discount-card ${sel ? "is-selected" : ""}`}
                 >
-                  <div className="text-[24px]">{d.icon}</div>
+                  <div className="text-[20px]">{d.icon}</div>
                   <div className="flex-1 text-left">
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-[14px]">{d.label}</span>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-semibold text-[12.5px] leading-tight">{d.label}</span>
                       <span className="discount-ribbon">−{Math.round((d.pct || 0) * 100)}%</span>
                     </div>
-                    <div className="text-[11.5px] text-[var(--text-muted)] mt-0.5 leading-snug">{d.sublabel}</div>
+                    <div className="text-[10.5px] text-[var(--text-muted)] mt-0.5 leading-snug">{d.sublabel}</div>
                   </div>
-                  <div className={`check-bubble ${sel ? "is-on" : ""}`}><Check size={14} strokeWidth={3} /></div>
+                  <div className={`check-bubble ${sel ? "is-on" : ""}`}><Check size={12} strokeWidth={3} /></div>
                 </motion.button>
               );
             })}
           </div>
-        </Section>
-      )}
-
-      {/* Live total */}
-      <AnimatePresence mode="popLayout">
-        {quote && (
-          <motion.div
-            key={`total-${quote.total}`}
-            initial={{ opacity: 0, y: 10, scale: 0.96 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            transition={{ type: "spring", stiffness: 380, damping: 26 }}
-            className="live-total-card"
-            data-testid="live-total"
-          >
-            <div>
-              <div className="text-[10.5px] uppercase tracking-[0.18em] font-semibold text-[var(--green-pale)]">Running total</div>
-              <div className="font-serif text-[34px] font-bold leading-none mt-1">${quote.total}</div>
-              {quote.discount_total > 0 && (
-                <div className="text-[11.5px] text-[var(--green-pale)] mt-1.5 flex items-center gap-1">
-                  <Tag size={11} /> You saved ${quote.discount_total}
-                </div>
-              )}
-            </div>
-            <div className="text-right text-[10.5px] uppercase tracking-[0.14em] font-semibold text-[var(--green-pale)]">
-              {quote.breakdown?.length || 0} line items
-            </div>
-          </motion.div>
         )}
-      </AnimatePresence>
+        <AnimatePresence mode="popLayout">
+          {quote && (
+            <motion.div
+              key={`total-${quote.total}`}
+              initial={{ opacity: 0, scale: 0.94 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ type: "spring", stiffness: 380, damping: 26 }}
+              className="live-total-card"
+              data-testid="live-total"
+            >
+              <div>
+                <div className="text-[10px] uppercase tracking-[0.18em] font-semibold text-[var(--green-pale)]">Running total</div>
+                <div className="font-serif text-[28px] font-bold leading-none mt-1.5">${quote.total}</div>
+                {quote.discount_total > 0 && (
+                  <div className="text-[10.5px] text-[var(--green-pale)] mt-1 flex items-center gap-1">
+                    <Tag size={10} /> Saved ${quote.discount_total}
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
     </div>
   );
 }
 
-function Section({ title, children }) {
+function SubHead({ children }) {
   return (
-    <div className="upsell-section">
-      <div className="text-[11px] uppercase tracking-[0.14em] font-semibold text-[var(--text-muted)] mb-2.5">{title}</div>
+    <div className="text-[10.5px] uppercase tracking-[0.14em] font-semibold text-[var(--text-muted)] mb-2 flex items-center gap-2">
       {children}
     </div>
   );
 }
 
-function Tile({ selected, onClick, children, badge, testid, delay = 0 }) {
+function PillTile({ selected, onClick, testid, badge, icon, label, delay = 0 }) {
   return (
     <motion.button
       type="button"
@@ -212,10 +200,31 @@ function Tile({ selected, onClick, children, badge, testid, delay = 0 }) {
       whileTap={{ scale: 0.97 }}
       onClick={onClick}
       data-testid={testid}
-      className={`upsell-tile ${selected ? "is-selected" : ""}`}
+      className={`property-pill ${selected ? "is-selected" : ""}`}
     >
-      {badge && <span className="upsell-badge">{badge}</span>}
-      {children}
+      {badge && <span className="property-badge">{badge}</span>}
+      <span className="text-[15px]">{icon}</span>
+      <span className="text-[12px] font-semibold">{label}</span>
+    </motion.button>
+  );
+}
+
+function CompactAddonTile({ selected, onClick, testid, badge, icon, label, desc, delay = 0 }) {
+  return (
+    <motion.button
+      type="button"
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay, duration: 0.25 }}
+      whileTap={{ scale: 0.97 }}
+      onClick={onClick}
+      data-testid={testid}
+      className={`addon-compact ${selected ? "is-selected" : ""}`}
+    >
+      {badge && <span className="addon-badge">{badge}</span>}
+      <span className="text-[18px] mb-0.5">{icon}</span>
+      <span className="font-semibold text-[12px] leading-tight">{label}</span>
+      <span className="text-[10px] text-[var(--text-muted)] leading-tight mt-0.5 line-clamp-2">{desc}</span>
     </motion.button>
   );
 }
@@ -228,20 +237,10 @@ function Counter({ testid, icon, label, value, setValue, min, max, priceEach, fr
   const inc = () => setValue(Math.min(max, safeValue + 1));
   return (
     <div className="counter-card" data-testid={testid}>
-      <div className="flex items-center gap-2.5 mb-3">
-        <span className="text-[20px]">{icon}</span>
-        <div>
-          <div className="font-semibold text-[13px]">{label}</div>
-          <div className="text-[10.5px] text-[var(--text-muted)]">
-            First {freeUnits} included · +${priceEach} each after
-          </div>
-        </div>
-      </div>
-      <div className="flex items-center justify-between gap-3">
-        <div className="counter-controls">
-          <button type="button" onClick={dec} data-testid={`${testid}-dec`} className="counter-btn" disabled={safeValue <= min}><Minus size={14} /></button>
-          <span className="counter-value" data-testid={`${testid}-value`}>{safeValue}</span>
-          <button type="button" onClick={inc} data-testid={`${testid}-inc`} className="counter-btn" disabled={safeValue >= max}><Plus size={14} /></button>
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <div className="flex items-center gap-1.5">
+          <span className="text-[15px]">{icon}</span>
+          <span className="font-semibold text-[12px]">{label}</span>
         </div>
         <AnimatePresence mode="popLayout">
           {extraCost > 0 && (
@@ -258,6 +257,11 @@ function Counter({ testid, icon, label, value, setValue, min, max, priceEach, fr
             </motion.span>
           )}
         </AnimatePresence>
+      </div>
+      <div className="counter-controls w-full justify-between">
+        <button type="button" onClick={dec} data-testid={`${testid}-dec`} className="counter-btn" disabled={safeValue <= min}><Minus size={12} /></button>
+        <span className="counter-value" data-testid={`${testid}-value`}>{safeValue}</span>
+        <button type="button" onClick={inc} data-testid={`${testid}-inc`} className="counter-btn" disabled={safeValue >= max}><Plus size={12} /></button>
       </div>
     </div>
   );
