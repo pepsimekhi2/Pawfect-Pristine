@@ -1,26 +1,41 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "frontend/package.json",
-      "use": "@vercel/static-build"
-    },
-    {
-      "src": "backend/server.js",
-      "use": "@vercel/node"
-    }
+  "installCommand": "cd frontend && yarn install --non-interactive",
+  "buildCommand": "cd frontend && CI=false yarn build",
+  "outputDirectory": "frontend/build",
+  "framework": "create-react-app",
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "https://api-errors-fix.preview.emergentagent.com/api/:path*" },
+    { "source": "/((?!api/|.*\\.).*)", "destination": "/index.html" }
   ],
-  "routes": [
+  "headers": [
     {
-      "src": "/api/(.*)",
-      "dest": "backend/server.js"
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "X-Frame-Options", "value": "SAMEORIGIN" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+        { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=(), interest-cohort=()" },
+        { "key": "Strict-Transport-Security", "value": "max-age=63072000; includeSubDomains; preload" }
+      ]
     },
     {
-      "handle": "filesystem"
+      "source": "/static/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
     },
     {
-      "src": "/(.*)",
-      "dest": "/"
+      "source": "/(favicon.ico|favicon.svg|apple-touch-icon.png|logo192.png|logo512.png|og-image.jpg|og-image.png|favicon-16x16.png|favicon-32x32.png)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=604800" }
+      ]
+    },
+    {
+      "source": "/(robots.txt|sitemap.xml|manifest.json)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=3600" }
+      ]
     }
   ]
 }
