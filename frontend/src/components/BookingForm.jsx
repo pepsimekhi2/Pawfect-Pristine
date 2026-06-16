@@ -58,6 +58,7 @@ export default function BookingForm() {
   const handleCategory = (cat) => {
     setCategory(cat);
     setService(cat === "home" ? "general_cleaning" : "dog_walking");
+    if (cat === "pet" && pets < 1) setPets(1);
   };
 
   const submit = async () => {
@@ -106,7 +107,7 @@ export default function BookingForm() {
         <div className="rounded-[32px] border-2 border-ink bg-white shadow-pop-lg p-6 md:p-10">
           {step < 4 && <StepDots step={step} total={3} />}
 
-          <AnimatePresence mode="wait">
+          <AnimatePresence initial={false}>
             {step === 1 && (
               <motion.div key="s1" {...fade} className="space-y-7">
                 <FieldLabel>Are we cleaning a home or caring for a pet?</FieldLabel>
@@ -234,9 +235,8 @@ export default function BookingForm() {
 
 const fade = {
   initial: { opacity: 0, x: 20 },
-  animate: { opacity: 1, x: 0 },
-  exit: { opacity: 0, x: -20 },
-  transition: { type: "spring", stiffness: 250, damping: 24 },
+  animate: { opacity: 1, x: 0, transition: { duration: 0.25, ease: "easeOut" } },
+  exit: { opacity: 0, x: -20, transition: { duration: 0.15, ease: "easeIn" } },
 };
 
 function FieldLabel({ children }) {
