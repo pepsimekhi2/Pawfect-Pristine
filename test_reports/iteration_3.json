@@ -1,0 +1,40 @@
+{
+  "summary": "Iteration 3 — UPSELL ENGINE. 11/11 backend pytest pass and full UpsellPanel UI verified on /book. /api/catalog returns starts_at and an `upsells` object per service with the exact property_types/room_questions/addons/discounts specified in the PRD. /api/quote correctly stacks base + room extras + addons + business +30% modifier + BYO −15% discount + advance fee — verified all 4 stated scenarios to the penny ($160.23, $15, $30, $46.75). Discounts correctly do NOT apply on pet services. Bookings persist property_type/bedrooms/bathrooms/addons/discounts and admin can read them back. Regression: admin passphrase 'duck' still grants admin JWT; 2-hour standard cleaning at 10:00 still blocks 10:00–11:30 for a 30-min dog walk on the same date (12:00 free). Frontend UpsellPanel renders property tiles with +30% badge on Business, bedrooms (default 2) / bathrooms (default 1) counters, 11 cleaning addons, the BYO −15% discount card. Live-total chip updates with spring animation on every interaction and shows 'You saved $X' when BYO is ticked. Switching to Pet category hides property type + discounts as required, shows the pet count question and 7 pet addons, all numeric updates match expected math (e.g. 12 → 22 with 3 pets → 27 with meds add-on).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_3.py",
+    "/app/test_reports/pytest/iteration_3.xml"
+  ],
+  "action_items": [
+    "(Nit, optional) UpsellPanel renders the addon container with data-testid=\"addon-grid\" — that string starts with `addon-` and inflates count-by-prefix queries. Rename to `addons-grid` (or `upsell-addon-grid`) to avoid future test-author confusion.",
+    "(Nit, optional) Service tiles on Step 1 do not appear to use data-testid=\"service-<key>\" (e.g. service-dog_walking selector returned null). The flow still works because pet category auto-selects dog_walking, but adding canonical service-<key> testids would harden e2e tests."
+  ],
+  "critical_code_review_comments": [
+    "pricing.compute_quote business surcharge is computed on the (base + rooms + addons) sub-total BEFORE the BYO discount and BYO is then applied to the post-surcharge total. Behavior matches the PRD's stated 160.23 target ($55+30+20+25+15=145 → ×1.30=188.50 → ×0.85=160.225 ≈ 160.23) — confirmed in test_business_with_rooms_addons_discount.",
+    "Discounts correctly category-gated via applies_to_categories=['home']; pet services ignore byo_supplies (verified).",
+    "BookingCreate forwards property_type/bedrooms/bathrooms/pet_count/addons/discounts into compute_quote and persists them on the booking doc; admin /api/admin/bookings/all returns them. No _id leakage observed.",
+    "_service_upsell_meta filters move_in_out only to deep_cleaning/general_cleaning — matches the 11-addon spec.",
+    "Live-total chip uses framer-motion AnimatePresence and survives rapid clicks without flicker."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration_3.py (new)"
+  ],
+  "success_rate": {
+    "backend": "100% (11/11 pytest)",
+    "frontend": "100% on UpsellPanel home + pet flows, math + visibility rules + live-total animation"
+  },
+  "test_credentials": "Admin passphrase 'duck' via POST /api/auth/admin-passphrase. Sample customer t1@example.com / Customer123! (not exercised in this iteration since upsell flow is unauthenticated).",
+  "seed_data_creation": "Pre-test cleanup: db.bookings.delete_many({name: /^TEST_/}) (removed 6 leftovers from iter-2). Iteration 3 creates 2 TEST_-prefixed bookings (+4d 16:30 and +90d 10:00). Recommend re-running the same Mongo cleanup before the next iteration.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend regression suite for the upsell engine lives at /app/backend/tests/test_iteration_3.py (11 tests, ~1s). The /api/availability blocking test uses date = today+90d; if Mongo has prior bookings on that date you'll need to bump the offset or clean TEST_ bookings. Iteration-2 suite at test_iteration_2.py also still passes. Frontend testids worth knowing: starts-at-banner, upsell-panel, property-{house,apartment,business}, bedrooms-counter[-inc|-dec|-value], bathrooms-counter[-inc|-dec|-value], pet-counter[-inc|-dec|-value], addon-<key>, addon-grid (container — careful with `addon-` prefix queries), discount-byo_supplies, live-total, cat-segmented-{home,pet}, tier-<key>.",
+  "rca of the issue": "No defects found. Two cosmetic notes: (1) addon-grid container shares `addon-` prefix with tile testids, inflating prefix-based counts by 1; (2) service tiles on Step 1 don't expose service-<key> testids, forcing tests to rely on text or the category-pet auto-select side-effect."
+}

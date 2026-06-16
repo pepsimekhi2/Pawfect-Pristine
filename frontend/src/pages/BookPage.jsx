@@ -9,6 +9,7 @@ import { CalendarPicker, TimePicker, FormattedDate, toIso } from "../components/
 import HelpBanner from "../components/HelpBanner";
 import PayPalHostedButton from "../components/PayPalHostedButton";
 import PaymentGuidelines from "../components/PaymentGuidelines";
+import UpsellPanel from "../components/UpsellPanel";
 
 const confettiColors = ["#3d7a5c", "#7a9e8a", "#a8cfc0", "#d4a435", "#eef7f2"];
 function fireConfetti() {
@@ -53,6 +54,13 @@ export default function BookPage() {
   const [success, setSuccess] = useState(null);
   const [error, setError] = useState("");
   const [takenTimes, setTakenTimes] = useState([]);
+  // Upsell state
+  const [propertyType, setPropertyType] = useState("house");
+  const [bedrooms, setBedrooms] = useState(2);
+  const [bathrooms, setBathrooms] = useState(1);
+  const [petCount, setPetCount] = useState(1);
+  const [addons, setAddons] = useState([]);
+  const [discounts, setDiscounts] = useState([]);
   // PayPal flow state
   const [guidelinesAccepted, setGuidelinesAccepted] = useState(false);
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
@@ -84,14 +92,35 @@ export default function BookPage() {
   const currentSvc = catalog?.[serviceValue];
   const currentTier = currentSvc?.tiers?.find((t) => t.key === tierKey);
 
-  // Recompute quote on changes
+  // Recompute quote on changes (debounced via dependency array)
   useEffect(() => {
     if (!serviceValue) return;
     const dateIso = date ? `${date}T${(time || "14:00")}:00Z` : null;
-    api.post("/api/quote", { service_value: serviceValue, tier_key: tierKey, preferred_date: dateIso })
+    const cat = currentSvc?.category;
+    const payload = {
+      service_value: serviceValue,
+      tier_key: tierKey,
+      preferred_date: dateIso,
+      addons,
+      discounts,
+    };
+    if (cat === "home") {
+      payload.property_type = propertyType;
+      payload.bedrooms = bedrooms;
+      payload.bathrooms = bathrooms;
+    } else if (cat === "pet") {
+      payload.pet_count = petCount;
+    }
+    api.post("/api/quote", payload)
       .then((r) => setQuote(r.data))
       .catch(() => setQuote(null));
-  }, [serviceValue, tierKey, date, time]);
+  }, [serviceValue, tierKey, date, time, propertyType, bedrooms, bathrooms, petCount, addons, discounts]); // eslint-disable-line
+
+  // Reset upsells (and selected add-ons) whenever the service changes
+  useEffect(() => {
+    setAddons([]);
+    setDiscounts([]);
+  }, [serviceValue]);
 
   const onCategory = (cat) => {
     setCategory(cat);
@@ -182,7 +211,8 @@ export default function BookPage() {
     setSubmitting(true);
     setError("");
     try {
-      const { data } = await api.post("/api/bookings", {
+      const cat = currentSvc?.category;
+      const payload = {
         name, phone, address,
         service_value: serviceValue,
         tier_key: tierKey,
@@ -195,7 +225,17 @@ export default function BookPage() {
         payment_plan: paymentPlan,
         payment_method: paymentMethod,
         tos_accepted: true,
-      });
+        addons,
+        discounts,
+      };
+      if (cat === "home") {
+        payload.property_type = propertyType;
+        payload.bedrooms = bedrooms;
+        payload.bathrooms = bathrooms;
+      } else if (cat === "pet") {
+        payload.pet_count = petCount;
+      }
+      const { data } = await api.post("/api/bookings", payload);
       setSuccess(data);
       fireConfetti();
       setStep(TOTAL_STEPS + 1);
@@ -246,6 +286,13 @@ export default function BookPage() {
                 />
                 <FieldLabel>Pick a service</FieldLabel>
                 <PillToggle testid="service-pills" options={services} value={serviceValue} onChange={onPickService} />
+                {currentSvc?.starts_at != null && (
+                  <div className="starts-at-banner" data-testid="starts-at-banner">
+                    <span className="text-[10.5px] uppercase tracking-[0.16em] font-semibold opacity-80">Pricing</span>
+                    <span className="font-serif text-[22px] ml-2">Starts at <strong>${currentSvc.starts_at}</strong></span>
+                    <span className="text-[11px] ml-2 opacity-80">— add-ons may apply</span>
+                  </div>
+                )}
                 {currentSvc?.has_tiers && (
                   <>
                     <FieldLabel>{currentSvc.tier_question}</FieldLabel>
@@ -265,7 +312,10 @@ export default function BookPage() {
                                 <div className="font-semibold text-[15px] text-[var(--text)]">{t.label}</div>
                                 <div className="text-[12px] text-[var(--text-muted)] mt-1">{t.desc}</div>
                               </div>
-                              <div className="font-serif text-[22px] text-[var(--green-dark)] leading-none">${t.price}</div>
+                              <div className="font-serif text-[22px] text-[var(--green-dark)] leading-none">
+                                <span className="text-[10px] uppercase tracking-[0.12em] text-[var(--text-muted)] block mb-0.5">from</span>
+                                ${t.price}
+                              </div>
                             </div>
                           </button>
                         );
@@ -273,6 +323,29 @@ export default function BookPage() {
                     </div>
                   </>
                 )}
+                <AnimatePresence>
+                  {currentSvc && tierKey && currentSvc.upsells && (
+                    <motion.div
+                      key={`upsells-${serviceValue}`}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+                    >
+                      <UpsellPanel
+                        svc={currentSvc}
+                        upsells={currentSvc.upsells}
+                        propertyType={propertyType} setPropertyType={setPropertyType}
+                        bedrooms={bedrooms} setBedrooms={setBedrooms}
+                        bathrooms={bathrooms} setBathrooms={setBathrooms}
+                        petCount={petCount} setPetCount={setPetCount}
+                        addons={addons} setAddons={setAddons}
+                        discounts={discounts} setDiscounts={setDiscounts}
+                        quote={quote}
+                      />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </motion.div>
             )}
 

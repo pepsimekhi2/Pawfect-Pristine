@@ -598,6 +598,162 @@ textarea.pp-input { min-height: 100px; resize: vertical; font-family: inherit; }
 }
 
 
+
+/* ============= Upsell Panel ============= */
+.starts-at-banner {
+  display: inline-flex;
+  align-items: baseline;
+  background: var(--green-light);
+  color: var(--green-dark);
+  border: 1.5px dashed var(--green-pale);
+  border-radius: 14px;
+  padding: 10px 16px;
+  margin-top: -4px;
+}
+.upsell-panel {
+  margin-top: 28px;
+  padding-top: 24px;
+  border-top: 1px dashed var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+.upsell-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.upsell-section { display: block; }
+.upsell-tile {
+  position: relative;
+  text-align: left;
+  background: #fff;
+  border: 1.5px solid var(--border);
+  border-radius: 14px;
+  padding: 14px 12px;
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+.upsell-tile:hover { border-color: var(--green-pale); }
+.upsell-tile.is-selected {
+  border-color: var(--green);
+  background: var(--green-light);
+  box-shadow: 0 6px 18px -10px rgba(36, 76, 56, 0.35);
+}
+.upsell-badge {
+  position: absolute;
+  top: -8px;
+  right: 10px;
+  background: var(--green-dark);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 999px;
+  letter-spacing: 0.04em;
+}
+.counter-card {
+  background: #fff;
+  border: 1.5px solid var(--border);
+  border-radius: 14px;
+  padding: 14px 14px;
+}
+.counter-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--bg-soft);
+  border-radius: 999px;
+  padding: 4px;
+}
+.counter-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff;
+  border: 1px solid var(--border);
+  color: var(--green-dark);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.counter-btn:hover:not(:disabled) { background: var(--green-light); border-color: var(--green-pale); }
+.counter-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.counter-value {
+  display: inline-block;
+  min-width: 26px;
+  text-align: center;
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--green-dark);
+  font-variant-numeric: tabular-nums;
+}
+.counter-extra {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--green-dark);
+  background: var(--green-light);
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+.discount-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: #fffaf0;
+  border: 1.5px solid #f1e0b3;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  text-align: left;
+}
+.discount-card:hover { border-color: var(--warn-border); }
+.discount-card.is-selected {
+  background: linear-gradient(135deg, #fff7e0, #fdf3c8);
+  border-color: var(--warn-border);
+  box-shadow: 0 6px 18px -10px rgba(212, 164, 53, 0.4);
+}
+.discount-ribbon {
+  display: inline-block;
+  font-size: 10.5px;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--gold);
+  color: #4d3a00;
+  letter-spacing: 0.06em;
+}
+.check-bubble {
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  border: 1.5px solid var(--border);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: transparent;
+  transition: all 0.2s ease;
+}
+.check-bubble.is-on {
+  background: var(--green);
+  border-color: var(--green);
+  color: #fff;
+}
+.live-total-card {
+  background: linear-gradient(135deg, var(--green-dark) 0%, var(--green) 100%);
+  color: #fff;
+  border-radius: 18px;
+  padding: 18px 22px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  box-shadow: 0 14px 30px -16px rgba(36, 76, 56, 0.55);
+}
+
 /* ============= TOS page ============= */
 .tos-pre {
   white-space: pre-wrap;

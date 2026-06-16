@@ -77,6 +77,12 @@ class QuotePayload(BaseModel):
     service_value: str
     tier_key: Optional[str] = None
     preferred_date: Optional[str] = None  # ISO date string
+    property_type: Optional[str] = None
+    bedrooms: Optional[int] = None
+    bathrooms: Optional[int] = None
+    pet_count: Optional[int] = None
+    addons: list[str] = []
+    discounts: list[str] = []
 
 
 class BookingCreate(BaseModel):
@@ -94,6 +100,13 @@ class BookingCreate(BaseModel):
     tos_accepted: bool = True
     access_method: Literal["home", "lockbox", "hidden_key", "garage_code", "doorman", "other"] = "home"
     access_notes: str = ""
+    # ── Upsell questionnaire ──
+    property_type: Optional[str] = None        # "house" | "apartment" | "business"
+    bedrooms: Optional[int] = None              # cleaning only
+    bathrooms: Optional[int] = None             # cleaning only
+    pet_count: Optional[int] = None             # pet services only
+    addons: list[str] = []                       # ["inside_fridge", "baseboards", ...]
+    discounts: list[str] = []                    # ["byo_supplies"]
 
 
 class RescheduleBody(BaseModel):
@@ -362,7 +375,15 @@ async def catalog():
 
 @api_router.post("/quote")
 async def quote(payload: QuotePayload):
-    q = compute_quote(payload.service_value, payload.tier_key, payload.preferred_date)
+    q = compute_quote(
+        payload.service_value, payload.tier_key, payload.preferred_date,
+        property_type=payload.property_type,
+        bedrooms=payload.bedrooms,
+        bathrooms=payload.bathrooms,
+        pet_count=payload.pet_count,
+        addon_keys=payload.addons,
+        discount_keys=payload.discounts,
+    )
     return q
 
 
@@ -427,7 +448,15 @@ async def create_booking(payload: BookingCreate, request: Request):
                 detail="That time slot overlaps another booking. Please pick a different time."
             )
 
-    quote_data = compute_quote(payload.service_value, payload.tier_key, payload.preferred_date)
+    quote_data = compute_quote(
+        payload.service_value, payload.tier_key, payload.preferred_date,
+        property_type=payload.property_type,
+        bedrooms=payload.bedrooms,
+        bathrooms=payload.bathrooms,
+        pet_count=payload.pet_count,
+        addon_keys=payload.addons,
+        discount_keys=payload.discounts,
+    )
 
     # Compute ETA if possible
     eta_dict = None
@@ -470,6 +499,12 @@ async def create_booking(payload: BookingCreate, request: Request):
         "notes": payload.notes,
         "access_method": payload.access_method,
         "access_notes": payload.access_notes,
+        "property_type": payload.property_type,
+        "bedrooms": payload.bedrooms,
+        "bathrooms": payload.bathrooms,
+        "pet_count": payload.pet_count,
+        "addons": payload.addons,
+        "discounts": payload.discounts,
         "preferred_date": payload.preferred_date,
         "preferred_time": payload.preferred_time,
         "duration_minutes": duration_min,
