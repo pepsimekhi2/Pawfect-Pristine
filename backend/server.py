@@ -1,19 +1,25 @@
-from fastapi import FastAPI, APIRouter, HTTPException
 from dotenv import load_dotenv
-from starlette.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
+from pathlib import Path
+ROOT_DIR = Path(__file__).parent
+load_dotenv(ROOT_DIR / '.env')
+
 import os
+import re
 import logging
 import uuid
 import httpx
-from pathlib import Path
-from pydantic import BaseModel, Field
-from typing import Optional, Literal
+from fastapi import FastAPI, APIRouter, HTTPException, Request, Depends, Response
+from starlette.middleware.cors import CORSMiddleware
+from motor.motor_asyncio import AsyncIOMotorClient
+from pydantic import BaseModel, Field, EmailStr
+from typing import Optional, Literal, List
 from datetime import datetime, timezone, timedelta
 from twilio.rest import Client as TwilioClient
 
-ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / '.env')
+from auth_utils import (
+    hash_password, verify_password, create_access_token, decode_token, extract_token
+)
+from pricing import compute_quote, get_public_catalog, SERVICE_CATALOG
 
 mongo_url = os.environ['MONGO_URL']
 mongo_client = AsyncIOMotorClient(mongo_url)
@@ -26,65 +32,82 @@ OWNER_PHONE = os.environ.get('OWNER_PHONE')
 ORIGIN_LAT = float(os.environ.get('ORIGIN_LAT', '33.7748'))
 ORIGIN_LON = float(os.environ.get('ORIGIN_LON', '-84.2963'))
 ORIGIN_LABEL = os.environ.get('ORIGIN_LABEL', 'Decatur, GA')
+ADMIN_EMAIL = os.environ.get('ADMIN_EMAIL')
+ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD')
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
+auth_router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 
-# ---------- Models ----------
+# ============= Models =============
+class RegisterPayload(BaseModel):
+    name: str
+    email: EmailStr
+    password: str
+    phone: Optional[str] = None
+
+
+class LoginPayload(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class UserOut(BaseModel):
+    id: str
+    name: str
+    email: str
+    phone: Optional[str] = None
+    role: str = "customer"
+
+
 class ETARequest(BaseModel):
     address: str
 
 
-class ETAResponse(BaseModel):
-    address: str
-    resolved_address: str
-    distance_miles: float
-    duration_minutes: float
-    arrival_time: str  # HH:MM AM/PM
-    arrival_window: str
-    zone: Literal["standard", "extended", "out_of_range"]
-    extra_fee: int
-    zone_label: str
-    zone_message: str
+class QuotePayload(BaseModel):
+    service_value: str
+    tier_key: Optional[str] = None
+    preferred_date: Optional[str] = None  # ISO date string
 
 
 class BookingCreate(BaseModel):
     name: str
     phone: str
     address: str
-    service_category: Literal["home", "pet"]
-    service_type: str
+    service_value: str  # internal key e.g. general_cleaning
+    tier_key: Optional[str] = None
     pets: int = 0
-    bedrooms: int = 0
-    bathrooms: int = 0
     notes: str = ""
-    preferred_date: str = ""
-    preferred_time: str = ""
+    preferred_date: str = ""   # ISO date e.g. 2026-02-14
+    preferred_time: str = ""   # "14:00"
+    payment_plan: Literal["pay_later", "half_now", "all_now"] = "pay_later"
+    payment_method: Literal["card", "cash", "later"] = "later"
+    tos_accepted: bool = True
 
 
-class Booking(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    name: str
-    phone: str
-    address: str
-    service_category: str
-    service_type: str
-    pets: int
-    bedrooms: int
-    bathrooms: int
-    notes: str
-    preferred_date: str
-    preferred_time: str
-    eta: Optional[dict] = None
-    sms_sent: bool = False
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+# ============= Helpers =============
+async def get_current_user(request: Request) -> dict:
+    token = extract_token(request)
+    payload = decode_token(token)
+    user = await db.users.find_one({"id": payload["sub"]})
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+    user.pop("password_hash", None)
+    user.pop("_id", None)
+    return user
 
 
-# ---------- Helpers ----------
+async def maybe_current_user(request: Request) -> Optional[dict]:
+    try:
+        return await get_current_user(request)
+    except HTTPException:
+        return None
+
+
 async def geocode_nominatim(address: str) -> Optional[dict]:
     url = "https://nominatim.openstreetmap.org/search"
     params = {"q": address, "format": "json", "limit": 1, "countrycodes": "us"}
@@ -96,122 +119,199 @@ async def geocode_nominatim(address: str) -> Optional[dict]:
         data = r.json()
         if not data:
             return None
-        return {
-            "lat": float(data[0]["lat"]),
-            "lon": float(data[0]["lon"]),
-            "display_name": data[0]["display_name"],
-        }
+        return {"lat": float(data[0]["lat"]), "lon": float(data[0]["lon"]), "display_name": data[0]["display_name"]}
 
 
-async def osrm_route(o_lat: float, o_lon: float, d_lat: float, d_lon: float) -> Optional[dict]:
+async def osrm_route(o_lat, o_lon, d_lat, d_lon) -> Optional[dict]:
     url = f"https://router.project-osrm.org/route/v1/driving/{o_lon},{o_lat};{d_lon},{d_lat}"
-    params = {"overview": "false"}
     async with httpx.AsyncClient(timeout=15) as client:
-        r = await client.get(url, params=params)
+        r = await client.get(url, params={"overview": "false"})
         if r.status_code != 200:
             return None
         data = r.json()
         if data.get("code") != "Ok" or not data.get("routes"):
             return None
         route = data["routes"][0]
-        return {
-            "distance_meters": route["distance"],
-            "duration_seconds": route["duration"],
-        }
+        return {"distance_meters": route["distance"], "duration_seconds": route["duration"]}
 
 
 def classify_zone(miles: float) -> dict:
     if miles <= 7:
-        return {
-            "zone": "standard",
-            "extra_fee": 0,
-            "zone_label": "Standard Service Area",
-            "zone_message": "You're right in our happy zone — no extra fees!",
-        }
+        return {"zone": "standard", "extra_fee": 0, "zone_label": "Standard Service Area",
+                "zone_message": "You're right in our happy zone — no extra fees!"}
     if miles <= 13:
-        return {
-            "zone": "extended",
-            "extra_fee": 20,
-            "zone_label": "Extended Service Area",
-            "zone_message": "We can swing by — a small $20 travel fee applies.",
-        }
-    return {
-        "zone": "out_of_range",
-        "extra_fee": 0,
-        "zone_label": "Out of Range",
-        "zone_message": "You're a bit far for our regular routes. Call us at (470) 381-4682 for a custom quote!",
-    }
+        return {"zone": "extended", "extra_fee": 20, "zone_label": "Extended Service Area",
+                "zone_message": "We can swing by — a small $20 travel fee applies."}
+    return {"zone": "out_of_range", "extra_fee": 0, "zone_label": "Out of Range",
+            "zone_message": "You're a bit far for our regular routes. Call us at (470) 381-4682 for a custom quote!"}
 
 
-def format_arrival(duration_minutes: float) -> tuple[str, str]:
-    now = datetime.now(timezone.utc) - timedelta(hours=5)  # roughly ET; display-only
-    arrival = now + timedelta(minutes=duration_minutes + 15)  # +15 min buffer to pack up
+def format_arrival(duration_minutes: float):
+    now = datetime.now(timezone.utc) - timedelta(hours=5)
+    arrival = now + timedelta(minutes=duration_minutes + 15)
     window_end = arrival + timedelta(minutes=20)
-
-    def fmt(dt: datetime) -> str:
-        h = dt.hour % 12
-        h = 12 if h == 0 else h
+    def fmt(dt):
+        h = dt.hour % 12 or 12
         suffix = "AM" if dt.hour < 12 else "PM"
         return f"{h}:{dt.minute:02d} {suffix}"
-
     return fmt(arrival), f"{fmt(arrival)} – {fmt(window_end)}"
 
 
 def send_owner_sms(body: str) -> bool:
     if not (TWILIO_SID and TWILIO_TOKEN and TWILIO_FROM and OWNER_PHONE):
-        logger.warning("Twilio not fully configured; skipping SMS")
         return False
     try:
         client = TwilioClient(TWILIO_SID, TWILIO_TOKEN)
-        msg = client.messages.create(body=body, from_=TWILIO_FROM, to=OWNER_PHONE)
-        logger.info(f"SMS sent: SID={msg.sid}")
+        client.messages.create(body=body, from_=TWILIO_FROM, to=OWNER_PHONE)
         return True
     except Exception as e:
-        logger.error(f"Twilio send failed: {e}")
+        logger.error(f"Twilio failed: {e}")
         return False
 
 
-# ---------- Routes ----------
+async def check_brute_force(identifier: str):
+    rec = await db.login_attempts.find_one({"identifier": identifier})
+    if rec and rec.get("count", 0) >= 5:
+        locked_until = rec.get("locked_until")
+        if locked_until and locked_until > datetime.now(timezone.utc):
+            mins = max(1, int((locked_until - datetime.now(timezone.utc)).total_seconds() / 60))
+            raise HTTPException(status_code=429, detail=f"Too many attempts. Try again in {mins} min.")
+
+
+async def record_failed_login(identifier: str):
+    rec = await db.login_attempts.find_one({"identifier": identifier})
+    count = (rec.get("count", 0) if rec else 0) + 1
+    locked_until = datetime.now(timezone.utc) + timedelta(minutes=15) if count >= 5 else None
+    await db.login_attempts.update_one(
+        {"identifier": identifier},
+        {"$set": {"count": count, "locked_until": locked_until, "updated_at": datetime.now(timezone.utc)}},
+        upsert=True,
+    )
+
+
+async def clear_attempts(identifier: str):
+    await db.login_attempts.delete_one({"identifier": identifier})
+
+
+def _to_user_out(user: dict) -> UserOut:
+    return UserOut(
+        id=user["id"], name=user["name"], email=user["email"],
+        phone=user.get("phone"), role=user.get("role", "customer"),
+    )
+
+
+# ============= Auth Routes =============
+@auth_router.post("/register")
+async def register(payload: RegisterPayload, request: Request, response: Response):
+    if len(payload.password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters.")
+    if not re.match(r"^[A-Za-z\s'\-]{2,80}$", payload.name.strip()):
+        raise HTTPException(status_code=400, detail="Please enter a valid name.")
+
+    email = payload.email.lower().strip()
+    existing = await db.users.find_one({"email": email})
+    if existing:
+        raise HTTPException(status_code=409, detail="An account with that email already exists.")
+
+    user_doc = {
+        "id": str(uuid.uuid4()),
+        "name": payload.name.strip(),
+        "email": email,
+        "phone": (payload.phone or "").strip() or None,
+        "password_hash": hash_password(payload.password),
+        "role": "customer",
+        "created_at": datetime.now(timezone.utc),
+    }
+    await db.users.insert_one(user_doc)
+    token = create_access_token(user_doc["id"], email)
+    response.set_cookie(key="access_token", value=token, httponly=True, secure=False, samesite="lax",
+                        max_age=60 * 60 * 24 * 7, path="/")
+    return {"user": _to_user_out(user_doc).model_dump(), "token": token}
+
+
+@auth_router.post("/login")
+async def login(payload: LoginPayload, request: Request, response: Response):
+    email = payload.email.lower().strip()
+    ip = request.client.host if request.client else "unknown"
+    identifier = f"{ip}:{email}"
+    await check_brute_force(identifier)
+
+    user = await db.users.find_one({"email": email})
+    if not user or not verify_password(payload.password, user.get("password_hash", "")):
+        await record_failed_login(identifier)
+        raise HTTPException(status_code=401, detail="Wrong email or password.")
+
+    await clear_attempts(identifier)
+    token = create_access_token(user["id"], email)
+    response.set_cookie(key="access_token", value=token, httponly=True, secure=False, samesite="lax",
+                        max_age=60 * 60 * 24 * 7, path="/")
+    return {"user": _to_user_out(user).model_dump(), "token": token}
+
+
+@auth_router.post("/logout")
+async def logout(response: Response):
+    response.delete_cookie("access_token", path="/")
+    return {"ok": True}
+
+
+@auth_router.get("/me")
+async def me(user: dict = Depends(get_current_user)):
+    return {"user": _to_user_out(user).model_dump()}
+
+
+# ============= Public/General Routes =============
 @api_router.get("/")
 async def root():
     return {"message": "Pawfect & Pristine API ready"}
 
 
-@api_router.post("/eta", response_model=ETAResponse)
-async def calculate_eta(payload: ETARequest):
-    address = payload.address.strip()
-    if not address:
-        raise HTTPException(status_code=400, detail="Address required")
+@api_router.get("/catalog")
+async def catalog():
+    return get_public_catalog()
 
-    geo = await geocode_nominatim(address)
+
+@api_router.post("/quote")
+async def quote(payload: QuotePayload):
+    q = compute_quote(payload.service_value, payload.tier_key, payload.preferred_date)
+    return q
+
+
+@api_router.post("/eta")
+async def calculate_eta(payload: ETARequest):
+    addr = payload.address.strip()
+    if not addr:
+        raise HTTPException(status_code=400, detail="Address required")
+    geo = await geocode_nominatim(addr)
     if not geo:
         raise HTTPException(status_code=404, detail="We couldn't find that address. Try including city + state.")
-
     route = await osrm_route(ORIGIN_LAT, ORIGIN_LON, geo["lat"], geo["lon"])
     if not route:
         raise HTTPException(status_code=502, detail="Routing service unavailable. Try again.")
-
-    distance_miles = round(route["distance_meters"] / 1609.34, 2)
-    duration_minutes = round(route["duration_seconds"] / 60, 1)
-    zone_info = classify_zone(distance_miles)
-    arrival_time, window = format_arrival(duration_minutes)
-
-    return ETAResponse(
-        address=address,
-        resolved_address=geo["display_name"],
-        distance_miles=distance_miles,
-        duration_minutes=duration_minutes,
-        arrival_time=arrival_time,
-        arrival_window=window,
-        **zone_info,
-    )
+    miles = round(route["distance_meters"] / 1609.34, 2)
+    mins = round(route["duration_seconds"] / 60, 1)
+    zone_info = classify_zone(miles)
+    arrival, window = format_arrival(mins)
+    return {
+        "address": addr, "resolved_address": geo["display_name"],
+        "distance_miles": miles, "duration_minutes": mins,
+        "arrival_time": arrival, "arrival_window": window, **zone_info,
+    }
 
 
+# ============= Booking Routes =============
 @api_router.post("/bookings")
-async def create_booking(payload: BookingCreate):
-    booking = Booking(**payload.model_dump())
+async def create_booking(payload: BookingCreate, request: Request):
+    user = await maybe_current_user(request)
 
-    # Try ETA if address looks usable
+    if not payload.tos_accepted:
+        raise HTTPException(status_code=400, detail="You must accept the Terms of Service.")
+
+    if payload.service_value not in SERVICE_CATALOG:
+        raise HTTPException(status_code=400, detail="Unknown service.")
+
+    quote_data = compute_quote(payload.service_value, payload.tier_key, payload.preferred_date)
+
+    # Compute ETA if possible
     eta_dict = None
     try:
         geo = await geocode_nominatim(payload.address)
@@ -220,76 +320,150 @@ async def create_booking(payload: BookingCreate):
             if route:
                 miles = round(route["distance_meters"] / 1609.34, 2)
                 mins = round(route["duration_seconds"] / 60, 1)
-                zone_info = classify_zone(miles)
-                eta_dict = {
-                    "distance_miles": miles,
-                    "duration_minutes": mins,
-                    "zone": zone_info["zone"],
-                    "extra_fee": zone_info["extra_fee"],
-                }
-    except Exception as e:
-        logger.warning(f"ETA in booking failed: {e}")
+                z = classify_zone(miles)
+                eta_dict = {"distance_miles": miles, "duration_minutes": mins,
+                            "zone": z["zone"], "extra_fee": z["extra_fee"]}
+    except Exception:
+        pass
 
-    booking.eta = eta_dict
+    travel_fee = eta_dict["extra_fee"] if eta_dict else 0
+    grand_total = round(quote_data["total"] + travel_fee, 2)
 
-    # Build SMS body for owner
+    # Compute "amount due now" based on payment plan
+    if payload.payment_plan == "all_now":
+        due_now = grand_total
+    elif payload.payment_plan == "half_now":
+        due_now = round(grand_total / 2, 2)
+    else:
+        due_now = 0
+    due_later = round(grand_total - due_now, 2)
+
+    booking = {
+        "id": str(uuid.uuid4()),
+        "user_id": user["id"] if user else None,
+        "name": payload.name,
+        "phone": payload.phone,
+        "address": payload.address,
+        "service_value": payload.service_value,
+        "service_label": quote_data["service_label"],
+        "tier_key": payload.tier_key,
+        "tier_label": quote_data["tier_label"],
+        "pets": payload.pets,
+        "notes": payload.notes,
+        "preferred_date": payload.preferred_date,
+        "preferred_time": payload.preferred_time,
+        "quote": quote_data,
+        "travel_fee": travel_fee,
+        "grand_total": grand_total,
+        "due_now": due_now,
+        "due_later": due_later,
+        "payment_plan": payload.payment_plan,
+        "payment_method": payload.payment_method,
+        "payment_status": "paid_full" if payload.payment_plan == "all_now" and payload.payment_method == "card" else (
+            "paid_half" if payload.payment_plan == "half_now" and payload.payment_method == "card" else "unpaid"
+        ),
+        "status": "scheduled",
+        "eta": eta_dict,
+        "tos_accepted": True,
+        "tos_accepted_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    booking["sms_sent"] = False
+
+    # Build SMS body
     eta_line = ""
     if eta_dict:
-        eta_line = f" • {eta_dict['distance_miles']}mi / ~{int(eta_dict['duration_minutes'])}min"
+        eta_line = f" · {eta_dict['distance_miles']}mi/~{int(eta_dict['duration_minutes'])}min"
         if eta_dict["extra_fee"] > 0:
             eta_line += f" (+${eta_dict['extra_fee']} travel)"
-    detail_bits = []
-    if payload.pets:
-        detail_bits.append(f"{payload.pets} pet(s)")
-    if payload.bedrooms:
-        detail_bits.append(f"{payload.bedrooms} BR")
-    if payload.bathrooms:
-        detail_bits.append(f"{payload.bathrooms} BA")
-    detail_str = " · ".join(detail_bits) if detail_bits else ""
-
     when = f"{payload.preferred_date} {payload.preferred_time}".strip() or "ASAP"
+    pay_summary = {
+        "all_now": "PAID IN FULL (card)",
+        "half_now": f"HALF PAID (${due_now}) · ${due_later} on arrival",
+        "pay_later": f"PAY ON ARRIVAL · ${grand_total} {payload.payment_method}",
+    }[payload.payment_plan]
 
     sms_body = (
         f"🐾 New Pawfect booking!\n"
         f"{payload.name} ({payload.phone})\n"
-        f"{payload.service_type} [{payload.service_category}]\n"
+        f"{quote_data['service_label']}"
+        + (f" — {quote_data['tier_label']}" if quote_data["tier_label"] else "") + "\n"
         f"When: {when}\n"
-        f"Addr: {payload.address}{eta_line}"
+        f"Addr: {payload.address}{eta_line}\n"
+        f"${grand_total} · {pay_summary}"
     )
-    if detail_str:
-        sms_body += f"\n{detail_str}"
     if payload.notes:
         sms_body += f"\nNote: {payload.notes[:100]}"
 
-    booking.sms_sent = send_owner_sms(sms_body)
+    booking["sms_sent"] = send_owner_sms(sms_body)
 
-    doc = booking.model_dump()
-    doc["created_at"] = doc["created_at"].isoformat()
-    await db.bookings.insert_one(doc)
+    await db.bookings.insert_one(booking)
 
     return {
-        "id": booking.id,
-        "sms_sent": booking.sms_sent,
+        "id": booking["id"],
+        "sms_sent": booking["sms_sent"],
         "eta": eta_dict,
+        "quote": quote_data,
+        "grand_total": grand_total,
+        "due_now": due_now,
+        "due_later": due_later,
         "message": "Booking received! We'll be in touch shortly.",
     }
 
 
-@api_router.get("/bookings/recent")
-async def recent_bookings(limit: int = 20):
-    docs = await db.bookings.find({}, {"_id": 0}).sort("created_at", -1).to_list(limit)
+@api_router.get("/bookings/me")
+async def my_bookings(user: dict = Depends(get_current_user)):
+    docs = await db.bookings.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(200)
     return docs
 
 
+@api_router.get("/bookings/recent")
+async def recent_bookings(limit: int = 20):
+    docs = await db.bookings.find({}, {"_id": 0, "tos_accepted": 0}).sort("created_at", -1).to_list(limit)
+    return docs
+
+
+# ============= App setup =============
 app.include_router(api_router)
+app.include_router(auth_router)
 
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.on_event("startup")
+async def startup_event():
+    await db.users.create_index("email", unique=True)
+    await db.users.create_index("id", unique=True)
+    await db.bookings.create_index("user_id")
+    await db.bookings.create_index("created_at")
+    await db.login_attempts.create_index("identifier", unique=True)
+
+    # Seed admin
+    if ADMIN_EMAIL and ADMIN_PASSWORD:
+        existing = await db.users.find_one({"email": ADMIN_EMAIL.lower()})
+        if not existing:
+            await db.users.insert_one({
+                "id": str(uuid.uuid4()),
+                "name": "Admin",
+                "email": ADMIN_EMAIL.lower(),
+                "password_hash": hash_password(ADMIN_PASSWORD),
+                "role": "admin",
+                "phone": None,
+                "created_at": datetime.now(timezone.utc),
+            })
+            logger.info("Seeded admin user")
+        elif not verify_password(ADMIN_PASSWORD, existing.get("password_hash", "")):
+            await db.users.update_one(
+                {"email": ADMIN_EMAIL.lower()},
+                {"$set": {"password_hash": hash_password(ADMIN_PASSWORD)}},
+            )
+            logger.info("Updated admin password")
 
 
 @app.on_event("shutdown")
