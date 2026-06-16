@@ -108,7 +108,7 @@ export default function UpsellPanel({
       {/* Add-ons */}
       {upsells.addons?.length > 0 && (
         <Section title={isHome ? "Add-ons" : "Extras"}>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5" data-testid="addon-grid">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5" data-testid="addons-grid">
             {upsells.addons.map((a, i) => {
               const sel = addons.includes(a.key);
               return (

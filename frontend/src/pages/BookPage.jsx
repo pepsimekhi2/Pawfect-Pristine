@@ -285,7 +285,7 @@ export default function BookPage() {
                   ]}
                 />
                 <FieldLabel>Pick a service</FieldLabel>
-                <PillToggle testid="service-pills" options={services} value={serviceValue} onChange={onPickService} />
+                <PillToggle testid="service" options={services} value={serviceValue} onChange={onPickService} />
                 {currentSvc?.starts_at != null && (
                   <div className="starts-at-banner" data-testid="starts-at-banner">
                     <span className="text-[10.5px] uppercase tracking-[0.16em] font-semibold opacity-80">Pricing</span>

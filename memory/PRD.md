@@ -185,3 +185,47 @@ User uploaded a static HTML landing page (`pawfect-and-pristine.html`) for a loc
 - A future enhancement could swap to PayPal Smart Buttons + Orders API
   (requires Client Secret + webhook listener) for automatic capture
   confirmation.
+
+
+---
+
+## v1.5 — Upsell Engine (2026-02-14)
+
+### Added
+- **"Starts at $X" pricing** — service cards no longer show fixed prices.
+  `get_public_catalog()` now returns `starts_at` (min tier price) per service
+  and a `from $X` label per tier card.
+- **UpsellPanel** (`frontend/src/components/UpsellPanel.jsx`) — animated
+  questionnaire that appears after the customer picks a tier in step 1:
+  - **Property type** (cleaning only): House / Apartment / Business.
+    Business adds **+30%** surcharge with a visible badge.
+  - **Room counts** (cleaning only): Bedrooms (first 2 free, $15 each after)
+    and Bathrooms (first 1 free, $10 each after) via animated counter widgets.
+  - **Pet count** (pet services only): first pet free, $5 each after.
+  - **Add-ons grid** — 11 cleaning add-ons (inside fridge $25, inside oven $20,
+    baseboards $15, interior windows $20, cabinet fronts $18, pet hair $12,
+    smoker $15, laundry $10, dishes $12, linens $10, move-in/out $50) and
+    7 pet add-ons (meds $5, photos $3, plants $5, mail $5, litter $5, bath $18,
+    treats $4).
+  - **BYO supplies discount** — 15% off cleaning services if the customer has
+    their own bleach/gloves/cleaner ready ("out and ready for me").
+- **Live running-total chip** — large green card pinned to the bottom of the
+  upsell panel, springs/animates on every change, surfaces "You saved $X"
+  when a discount is applied.
+- **Backend**:
+  - `compute_quote()` rewritten with optional kwargs:
+    `property_type`, `bedrooms`, `bathrooms`, `pet_count`, `addon_keys`,
+    `discount_keys`. Layers them in the correct order
+    (`(base + extras + addons) × (1 + property_pct) − discounts × pct + advance_fee`).
+  - `QuotePayload` and `BookingCreate` extended; new fields persisted on the
+    booking document so admin can see them and re-quote.
+  - `_starts_at()` / `_service_upsell_meta()` helpers + module-level catalogues
+    `CLEANING_ADDONS`, `PET_ADDONS`, `PROPERTY_TYPES`, `ROOM_QUESTIONS`,
+    `PET_COUNT_QUESTION`, `DISCOUNTS` for easy owner edits.
+
+### Notes
+- Discount eligibility is category-gated via `applies_to_categories` —
+  BYO supplies cannot be applied to pet services.
+- `move_in_out` add-on is only surfaced on general/deep cleaning services.
+- Backend regression suite at `backend/tests/test_iteration_3.py`
+  (11 tests, ~1s) covers all the math + persistence + visibility rules.
