@@ -64,3 +64,39 @@ User uploaded a static HTML landing page (`pawfect-and-pristine.html`) for a loc
   - Admin view of `bookings/recent` for the owner.
   - Map preview of the driving route in ETA result.
   - Repeat-customer remember-me (cookie for name/phone/address).
+
+
+---
+
+## v1.1 — Customer accounts, dashboard, Firebase mirror (2026-06-16)
+
+### Added
+- **Customer auth UI** (`/login`, `/signup`) — email + password against the existing
+  JWT/bcrypt FastAPI auth. Split-hero layout with the brand bulldog.
+- **Customer dashboard** at `/dashboard` (route-protected via `RequireAuth`):
+  - Month calendar (custom, no external lib) with green dots for booked days and
+    a click-to-reveal day detail panel.
+  - "Next visit" callout card, upcoming list with status + payment pills, and
+    a per-booking cancel control.
+- **Refactored 5-step Book flow** (`/book`) using:
+  - service + per-service tier picker (e.g. "How messy is the space?" for
+    cleaning/organizing; "Walk length" for dog walking).
+  - **Custom CalendarPicker + TimePicker** components (no react-day-picker).
+  - Payment plan (`pay_later` / `half_now` / `all_now`) + method (`card` /
+    `cash`). Cash is gated to `pay_later` only.
+  - Mock card form (Stripe coming later).
+  - TOS checkbox + cross-link.
+- **Terms of Service** — `backend/tos.py` and a `/tos` page at the frontend.
+  `GET /api/tos` returns `{ version, effective, text }`. Includes 24hr / 50%
+  cancellation rule, pet liability, key handling, no-show 100%, etc.
+- **Firebase RTDB mirror** — `backend/firebase_sync.py` PUT-mirrors `users/{uid}`,
+  `bookings/{id}`, and `user_bookings/{uid}/{bookingId}` via REST API. No admin
+  SDK — writes are unauthenticated and rely on the user pasting the rules in
+  `FIREBASE_RULES.md`. All errors are swallowed (MongoDB stays authoritative).
+- **New endpoints:** `GET /api/bookings/upcoming`, `POST /api/bookings/{id}/cancel`,
+  `GET /api/tos`, `GET /api/firebase/status`.
+
+### Open
+- Stripe / real "Pay NOW" tap-to-pay is **MOCKED** awaiting publishable + secret keys.
+- Firebase Admin SDK service-account integration is open — when added, rules can be
+  tightened to per-user auth.uid validation (template provided).
