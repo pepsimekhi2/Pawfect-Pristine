@@ -145,3 +145,43 @@ User uploaded a static HTML landing page (`pawfect-and-pristine.html`) for a loc
   is consolidated across pod replicas (today: per-pod ingress IP).
 - **P2** — Split `server.py` (~830 lines) into routers (`auth.py`, `bookings.py`,
   `admin.py`) and a `services/` module for helpers.
+
+
+---
+
+## v1.4 — PayPal Hosted Button + strict prepayment guidelines (2026-02-14)
+
+### Added
+- **PayPal Hosted Button** (merchant: Pawfect & Pristine, button id
+  `NH6XJFN6LK8E2`) embedded on booking step 4 when the customer picks
+  "Pay half now via PayPal" or "Pay in full now via PayPal". The button is
+  rendered through `frontend/src/components/PayPalHostedButton.jsx`, which
+  lazily loads PayPal's JS SDK (`hosted-buttons` + `venmo` funding, USD).
+  Customer enters the amount inside PayPal's flow → money lands in the
+  merchant's PayPal Business immediately.
+- **PaymentGuidelines component** — large green `$amount` callout + five
+  plain-English rules (exact amount, no-pay = no-service & police involvement,
+  chargebacks = fraud, overpay refund, no post-completion refunds). The PayPal
+  button is gated behind a required acknowledgement checkbox.
+- **Two-step pay confirmation** — after PayPal, user taps
+  "I've sent $X via PayPal" which advances the booking to step 5.
+- **Backend additions**:
+  - `payment_method` Literal extended with `"paypal"`.
+  - `payment_status` set to `paid_full_pending_verify` or
+    `paid_half_pending_verify` when method is PayPal (admin must verify by
+    cross-checking PayPal Business inbox).
+  - Owner-SMS body adapts to PayPal payments.
+- **Frontend env vars** (in `frontend/.env`):
+  - `REACT_APP_PAYPAL_CLIENT_ID`
+  - `REACT_APP_PAYPAL_HOSTED_BUTTON_ID`
+
+### Removed
+- Mock card form (Stripe placeholder) — replaced by PayPal Hosted Button.
+
+### Limitations / Open
+- PayPal Hosted Button does NOT post back to our server, so the booking is
+  flagged "pending verify" rather than auto-confirmed. Admin manually verifies
+  against PayPal transactions and (future) flips to `paid_full` / `paid_half`.
+- A future enhancement could swap to PayPal Smart Buttons + Orders API
+  (requires Client Secret + webhook listener) for automatic capture
+  confirmation.

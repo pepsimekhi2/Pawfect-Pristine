@@ -1,12 +1,14 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, CheckCircle2, Send, ArrowLeft, CreditCard, Banknote, Wallet } from "lucide-react";
+import { Sparkles, CheckCircle2, Send, ArrowLeft, Wallet } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import api from "../lib/api";
 import { SegmentedControl, PillToggle, Stepper, PrimaryButton, OutlineButton } from "../components/ui-kit";
 import { CalendarPicker, TimePicker, FormattedDate, toIso } from "../components/CalendarPicker";
 import HelpBanner from "../components/HelpBanner";
+import PayPalHostedButton from "../components/PayPalHostedButton";
+import PaymentGuidelines from "../components/PaymentGuidelines";
 
 const confettiColors = ["#3d7a5c", "#7a9e8a", "#a8cfc0", "#d4a435", "#eef7f2"];
 function fireConfetti() {
@@ -51,10 +53,9 @@ export default function BookPage() {
   const [success, setSuccess] = useState(null);
   const [error, setError] = useState("");
   const [takenTimes, setTakenTimes] = useState([]);
-  // mock card
-  const [cardNum, setCardNum] = useState("4242 4242 4242 4242");
-  const [cardExp, setCardExp] = useState("12/29");
-  const [cardCvc, setCardCvc] = useState("123");
+  // PayPal flow state
+  const [guidelinesAccepted, setGuidelinesAccepted] = useState(false);
+  const [paymentConfirmed, setPaymentConfirmed] = useState(false);
 
   // Prefill from user
   useEffect(() => {
@@ -120,6 +121,21 @@ export default function BookPage() {
     return 0;
   }, [paymentPlan, grandTotal]);
 
+  // Reset PayPal acknowledgement if user changes plan/method
+  useEffect(() => {
+    setGuidelinesAccepted(false);
+    setPaymentConfirmed(false);
+  }, [paymentPlan, paymentMethod, grandTotal]); // eslint-disable-line
+
+  // Force method to "paypal" when plan != pay_later (cash only allowed on pay_later)
+  useEffect(() => {
+    if (paymentPlan === "pay_later") {
+      if (paymentMethod !== "cash") setPaymentMethod("cash");
+    } else if (paymentMethod === "cash") {
+      setPaymentMethod("paypal");
+    }
+  }, [paymentPlan]); // eslint-disable-line
+
   // ETA on address change (debounced)
   useEffect(() => {
     if (!address || address.length < 6) { setEta(null); return; }
@@ -155,9 +171,11 @@ export default function BookPage() {
   const s2Valid = !!date && !!time;
   const s3Valid = name.trim() && phone.trim() && address.trim() && accessMethod
     && (accessMethod !== "other" || accessNotes.trim().length > 2);
-  const s4Valid = (paymentPlan === "pay_later" || paymentMethod === "cash")
-    ? true
-    : (cardNum.replace(/\s/g,"").length >= 12 && cardExp.length >= 4 && cardCvc.length >= 3);
+  // For pay_later: just need cash method. For half/all-now: must accept guidelines & click confirm.
+  const requiresPayPal = paymentPlan !== "pay_later" && paymentMethod === "paypal";
+  const s4Valid = paymentPlan === "pay_later"
+    ? paymentMethod === "cash"
+    : (requiresPayPal && guidelinesAccepted && paymentConfirmed);
   const s5Valid = tosAccepted;
 
   const submit = async () => {
@@ -356,7 +374,7 @@ export default function BookPage() {
                     onClick={() => setPaymentPlan("pay_later")}
                     testid="plan-pay_later"
                     title="Pay on arrival"
-                    desc="No charge today. Pay when we arrive — cash or card."
+                    desc="No charge today. Pay cash when we arrive."
                     amount={`$0 now · $${grandTotal} on arrival`}
                     icon="⏰"
                   />
@@ -364,8 +382,8 @@ export default function BookPage() {
                     selected={paymentPlan === "half_now"}
                     onClick={() => setPaymentPlan("half_now")}
                     testid="plan-half_now"
-                    title="Pay half now"
-                    desc="Reserve your spot with half. The rest is due on arrival."
+                    title="Pay half now via PayPal"
+                    desc="Reserve your spot with half. The rest is due in cash on arrival."
                     amount={`$${Math.round((grandTotal/2)*100)/100} now · $${Math.round((grandTotal/2)*100)/100} on arrival`}
                     icon="⚖️"
                   />
@@ -373,61 +391,61 @@ export default function BookPage() {
                     selected={paymentPlan === "all_now"}
                     onClick={() => setPaymentPlan("all_now")}
                     testid="plan-all_now"
-                    title="Pay in full now"
-                    desc="Get it out of the way. We&rsquo;ll just show up and do the work."
+                    title="Pay in full now via PayPal"
+                    desc="Get it out of the way. We'll just show up and do the work."
                     amount={`$${grandTotal} now · $0 on arrival`}
                     icon="✨"
                   />
                 </div>
 
-                <div className="h-px bg-[var(--border)] my-2" />
+                {paymentPlan !== "pay_later" && (
+                  <div className="mt-2" data-testid="paypal-section">
+                    <div className="h-px bg-[var(--border)] my-2" />
+                    <PaymentGuidelines
+                      amount={dueNow}
+                      planLabel={paymentPlan === "all_now" ? "Paying in full now" : "Paying half now · rest on arrival"}
+                      accepted={guidelinesAccepted}
+                      onChange={setGuidelinesAccepted}
+                    />
 
-                <FieldLabel>Payment method</FieldLabel>
-                <div className="grid sm:grid-cols-2 gap-3" data-testid="payment-methods">
-                  <MethodCard
-                    selected={paymentMethod === "card"}
-                    onClick={() => setPaymentMethod("card")}
-                    testid="method-card"
-                    icon={<CreditCard size={18} />}
-                    title="Tap to pay / card"
-                    desc="Apple Pay, Google Pay, or card."
-                  />
-                  <MethodCard
-                    selected={paymentMethod === "cash"}
-                    onClick={() => setPaymentMethod("cash")}
-                    testid="method-cash"
-                    icon={<Banknote size={18} />}
-                    title="Cash on arrival"
-                    desc="Pay our team in person."
-                    disabled={paymentPlan !== "pay_later"}
-                    disabledReason="Cash is only available with 'Pay on arrival'."
-                  />
-                </div>
+                    {guidelinesAccepted && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.3 }}
+                        className="mt-5"
+                        data-testid="paypal-active"
+                      >
+                        <div className="text-[11px] uppercase tracking-[0.14em] font-semibold text-[var(--text-muted)] mb-3">
+                          Step 1 · Pay ${dueNow} in PayPal
+                        </div>
+                        <PayPalHostedButton testid="paypal-button" />
+                        <div className="text-[11px] text-[var(--text-muted)] mt-3 leading-relaxed">
+                          PayPal opens in a new tab. Once your payment shows as <strong>Sent</strong>, come back and tap below.
+                        </div>
 
-                {paymentPlan !== "pay_later" && paymentMethod === "card" && (
-                  <div className="card-form bg-[var(--green-light)]/60 border border-[var(--border)] rounded-[16px] p-5 mt-2" data-testid="mock-card-form">
-                    <div className="flex items-center gap-2 text-[12px] uppercase tracking-[0.14em] font-semibold text-[var(--green)] mb-3">
-                      <Wallet size={14} /> Pay now — secure card details (mocked for demo)
-                    </div>
-                    <div className="grid gap-3">
-                      <div>
-                        <SmallLabel>Card number</SmallLabel>
-                        <input className="pp-input mt-1.5 tabular-nums" data-testid="card-number" value={cardNum} onChange={(e) => setCardNum(e.target.value)} />
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <SmallLabel>Expiry (MM/YY)</SmallLabel>
-                          <input className="pp-input mt-1.5" data-testid="card-exp" value={cardExp} onChange={(e) => setCardExp(e.target.value)} />
+                        <div className="text-[11px] uppercase tracking-[0.14em] font-semibold text-[var(--text-muted)] mt-6 mb-2">
+                          Step 2 · Confirm you sent it
                         </div>
-                        <div>
-                          <SmallLabel>CVC</SmallLabel>
-                          <input className="pp-input mt-1.5" data-testid="card-cvc" value={cardCvc} onChange={(e) => setCardCvc(e.target.value)} />
-                        </div>
-                      </div>
-                      <div className="text-[11px] text-[var(--text-muted)] mt-1">
-                        Stripe integration coming soon. No real card is charged.
-                      </div>
-                    </div>
+                        <button
+                          type="button"
+                          onClick={() => setPaymentConfirmed((v) => !v)}
+                          data-testid="paypal-confirmed-btn"
+                          className={`payment-confirmed-btn ${paymentConfirmed ? "is-active" : ""}`}
+                        >
+                          {paymentConfirmed ? (
+                            <><CheckCircle2 size={18} /> Payment of ${dueNow} sent — let's finish booking</>
+                          ) : (
+                            <><Wallet size={18} /> I've sent ${dueNow} via PayPal</>
+                          )}
+                        </button>
+                        {paymentConfirmed && (
+                          <div className="text-[11.5px] text-[var(--text-muted)] mt-3 leading-relaxed" data-testid="paypal-confirmed-note">
+                            Got it — your booking will be marked <strong>pending verification</strong>. We'll cross-check PayPal and confirm by text within the hour.
+                          </div>
+                        )}
+                      </motion.div>
+                    )}
                   </div>
                 )}
               </motion.div>
@@ -453,7 +471,7 @@ export default function BookPage() {
                   <div className="h-px bg-[var(--border)] my-3" />
                   <Row k="Due now" v={<span className="font-semibold text-[var(--green-dark)]">${dueNow}</span>} />
                   <Row k="Due on arrival" v={`$${Math.round((grandTotal-dueNow)*100)/100}`} />
-                  <Row k="Method" v={paymentMethod === "card" ? "Tap-to-pay / card" : "Cash on arrival"} />
+                  <Row k="Method" v={paymentMethod === "paypal" ? "PayPal" : "Cash on arrival"} />
                 </div>
                 <label className="tos-row" data-testid="tos-row">
                   <input type="checkbox" data-testid="tos-checkbox" checked={tosAccepted} onChange={(e) => setTosAccepted(e.target.checked)} />
@@ -540,26 +558,6 @@ function PlanCard({ selected, onClick, testid, title, desc, amount, icon }) {
           <div className="font-semibold text-[15px] text-[var(--text)]">{title}</div>
           <div className="text-[12px] text-[var(--text-muted)] mt-0.5">{desc}</div>
           <div className="text-[12px] text-[var(--green-dark)] font-medium mt-2">{amount}</div>
-        </div>
-      </div>
-    </button>
-  );
-}
-function MethodCard({ selected, onClick, testid, icon, title, desc, disabled, disabledReason }) {
-  return (
-    <button
-      type="button"
-      onClick={() => { if (!disabled) onClick(); }}
-      data-testid={testid}
-      disabled={disabled}
-      title={disabled ? disabledReason : ""}
-      className={`method-card ${selected ? "is-selected" : ""} ${disabled ? "is-disabled" : ""}`}
-    >
-      <div className="flex items-center gap-3">
-        <span className="method-icon">{icon}</span>
-        <div className="text-left">
-          <div className="font-semibold text-[14px] text-[var(--text)]">{title}</div>
-          <div className="text-[12px] text-[var(--text-muted)] mt-0.5">{desc}</div>
         </div>
       </div>
     </button>

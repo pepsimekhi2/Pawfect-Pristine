@@ -90,7 +90,7 @@ class BookingCreate(BaseModel):
     preferred_date: str = ""   # ISO date e.g. 2026-02-14
     preferred_time: str = ""   # "14:00"
     payment_plan: Literal["pay_later", "half_now", "all_now"] = "pay_later"
-    payment_method: Literal["card", "cash", "later"] = "later"
+    payment_method: Literal["card", "cash", "later", "paypal"] = "later"
     tos_accepted: bool = True
     access_method: Literal["home", "lockbox", "hidden_key", "garage_code", "doorman", "other"] = "home"
     access_notes: str = ""
@@ -480,8 +480,10 @@ async def create_booking(payload: BookingCreate, request: Request):
         "due_later": due_later,
         "payment_plan": payload.payment_plan,
         "payment_method": payload.payment_method,
-        "payment_status": "paid_full" if payload.payment_plan == "all_now" and payload.payment_method == "card" else (
-            "paid_half" if payload.payment_plan == "half_now" and payload.payment_method == "card" else "unpaid"
+        "payment_status": (
+            "paid_full_pending_verify" if payload.payment_plan == "all_now" and payload.payment_method == "paypal"
+            else "paid_half_pending_verify" if payload.payment_plan == "half_now" and payload.payment_method == "paypal"
+            else "unpaid"
         ),
         "status": "scheduled",
         "eta": eta_dict,
@@ -499,8 +501,9 @@ async def create_booking(payload: BookingCreate, request: Request):
             eta_line += f" (+${eta_dict['extra_fee']} travel)"
     when = f"{payload.preferred_date} {payload.preferred_time}".strip() or "ASAP"
     pay_summary = {
-        "all_now": "PAID IN FULL (card)",
-        "half_now": f"HALF PAID (${due_now}) · ${due_later} on arrival",
+        "all_now": "PAID IN FULL via PayPal (verify)" if payload.payment_method == "paypal" else "PAID IN FULL",
+        "half_now": f"HALF PAID via PayPal (${due_now}, verify) · ${due_later} on arrival" if payload.payment_method == "paypal"
+                     else f"HALF PAID (${due_now}) · ${due_later} on arrival",
         "pay_later": f"PAY ON ARRIVAL · ${grand_total} {payload.payment_method}",
     }[payload.payment_plan]
 

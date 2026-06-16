@@ -557,6 +557,47 @@ textarea.pp-input { min-height: 100px; resize: vertical; font-family: inherit; }
   cursor: pointer;
 }
 
+/* ============= Payment Guidelines ============= */
+.payment-guidelines {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.amount-callout {
+  background: linear-gradient(135deg, var(--green-dark) 0%, var(--green) 100%);
+  color: #fff;
+  border-radius: 18px;
+  padding: 22px 24px;
+  text-align: center;
+  box-shadow: 0 10px 30px -12px rgba(36, 76, 56, 0.4);
+}
+.guidelines-card {
+  background: #fffdf8;
+  border: 1.5px solid var(--border);
+  border-radius: 18px;
+  padding: 22px 24px;
+}
+.guidelines-card ul { list-style: none; padding: 0; margin: 0; }
+.rule-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 8px 0;
+}
+.rule-icon {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--green-light);
+  color: var(--green-dark);
+  margin-top: 2px;
+}
+
+
 /* ============= TOS page ============= */
 .tos-pre {
   white-space: pre-wrap;
@@ -594,6 +635,34 @@ textarea.pp-input { min-height: 100px; resize: vertical; font-family: inherit; }
 }
 .pay-paid_full { color: var(--green); border-color: var(--green-pale); background: var(--green-light); }
 .pay-paid_half { color: #7a5c00; border-color: var(--warn-border); background: var(--warn-bg); }
+.pay-paid_full_pending_verify,
+.pay-paid_half_pending_verify {
+  color: #5b4399;
+  border-color: #d3c7eb;
+  background: #f1ecfb;
+}
+
+/* PayPal "I sent it" confirm button */
+.payment-confirmed-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 20px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 13.5px;
+  border: 1.5px solid var(--green);
+  background: #fff;
+  color: var(--green-dark);
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+.payment-confirmed-btn:hover { background: var(--green-light); }
+.payment-confirmed-btn.is-active {
+  background: var(--green);
+  color: #fff;
+  border-color: var(--green);
+}
 
 .upcoming-item {
   border: 1px solid var(--border);

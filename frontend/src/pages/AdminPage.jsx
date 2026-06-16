@@ -38,7 +38,13 @@ function StatusPill({ status }) {
 }
 function PayBadge({ b }) {
   const ps = b.payment_status || "unpaid";
-  const label = { paid_full: "Paid in full", paid_half: "Half paid", unpaid: "Pay on arrival" }[ps] || ps;
+  const label = {
+    paid_full: "Paid in full",
+    paid_half: "Half paid",
+    paid_full_pending_verify: "PayPal · verify",
+    paid_half_pending_verify: "Half · PayPal · verify",
+    unpaid: "Pay on arrival",
+  }[ps] || ps;
   return <span className={`pay-pill pay-${ps}`}>{label}</span>;
 }
 
