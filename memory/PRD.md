@@ -30,15 +30,21 @@ User uploaded a static HTML landing page (`pawfect-and-pristine.html`) for a loc
   - `POST /api/eta` → geocode + route + zone classification + arrival window.
   - `POST /api/bookings` → persists to MongoDB, computes ETA, sends Twilio SMS to owner.
   - `GET /api/bookings/recent` → list recent bookings.
-- **Frontend**
-  - Hero with floating paw stickers, asymmetric layout, dog hero image.
-  - Bento-grid Services section (8 services, hover wiggle).
-  - Stats row (insured / 5★ / pet-safe / same caregiver).
-  - ETA Calculator widget with live OSRM routing + zone badge + out-of-range call CTA.
-  - Multi-step Booking Form (Home/Pet → details → contact) with confetti success.
-  - Infinite testimonials marquee.
-  - Final CTA + footer with service-area copy.
-- **Custom UI kit** (`components/ui-kit.jsx`) — Framer-Motion spring buttons, segmented control with layoutId pill, stepper, paw SVG.
+- **Frontend (v2 — green editorial restyle, kept on user request)**
+  - **Palette**: deep forest green (`#1e3a2f` / `#3d7a5c`), green-light (`#eef7f2`), cream `#fdf9f5`, gold stars.
+  - **Typography**: Playfair Display (serif, italic-green emphasis) + Inter (body / UI).
+  - Sticky white nav with "Pawfect & Pristine · HOME & PET SERVICES" logo block.
+  - 2-column Hero: gradient panel with eyebrow/title/sub/CTAs + full-bleed dog image with floating "Locally owned" badge.
+  - Service strip (dot-separated) under hero.
+  - 8-card Services grid with green/warm icon bubbles + Home/Pet tags.
+  - Split section: Clean home image ↔ benefits checklist with green check pills.
+  - 3-image Pet block (Dog Walking / Pet Sitting / Playtime) with hover zoom.
+  - Stats band on green-light background.
+  - **ETA Calculator** card with green-light result stats, refined zone badge (✓ standard / ⚠ extended / ✕ out-of-range with call CTA).
+  - 3-card testimonial grid (light green cards, gold stars, initials avatar).
+  - Multi-step booking form with thin green progress bar, refined steppers, success state with subtle confetti in brand colors.
+  - Dark-green footer (`#0f2018`) with 4 columns.
+- **Custom UI kit** (`components/ui-kit.jsx`) — refined SegmentedControl (green pill), PillToggle (green-light selected), Stepper (− white / + green), Primary/Outline/Ghost buttons.
 - Verified by testing subagent (8/8 backend pytest, frontend smoke + integration). Critical pet-step-2 bug found and fixed (removed AnimatePresence `mode="wait"`).
 
 ## Configuration / env

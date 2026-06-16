@@ -1,132 +1,141 @@
 import React from "react";
 import { motion } from "framer-motion";
-import { Sparkles, ShieldCheck, Star, Heart, Phone, Mail, MapPin } from "lucide-react";
-import { PrimaryButton, GhostButton, PawSVG } from "./components/ui-kit";
+import { Phone, Mail, MapPin, Calendar, Check } from "lucide-react";
+import { PrimaryButton, OutlineButton, GhostWhiteButton } from "./components/ui-kit";
 import EtaCalculator from "./components/EtaCalculator";
 import BookingForm from "./components/BookingForm";
 import "./App.css";
 
-const HERO_DOG = "https://images.unsplash.com/photo-1583511655857-d19b40a7a54e?w=900&q=80&auto=format&fit=crop";
+const IMG = {
+  heroDog: "https://images.unsplash.com/photo-1583511655857-d19b40a7a54e?w=900&auto=format&fit=crop&q=80",
+  cleanHome: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=900&auto=format&fit=crop&q=80",
+  dogWalk: "https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=600&auto=format&fit=crop&q=80",
+  catDog: "https://images.unsplash.com/photo-1450778869180-41d0601e046e?w=600&auto=format&fit=crop&q=80",
+  puppy: "https://images.unsplash.com/photo-1601758124510-52d02ddb7cbd?w=600&auto=format&fit=crop&q=80",
+};
 
 const SERVICES = [
-  { value: "general_cleaning", label: "General Cleaning", cat: "Home", emoji: "🧹", color: "var(--pp-pink)", span: "md:col-span-2", desc: "Kitchens, bathrooms, floors — spotless every visit." },
-  { value: "deep_cleaning", label: "Deep Cleaning", cat: "Home", emoji: "✨", color: "var(--pp-yellow)", desc: "Behind appliances, inside cabinets, grout lines." },
-  { value: "organizing", label: "Organizing", cat: "Home", emoji: "📦", color: "var(--pp-sage-light)", desc: "Sorted closets, systems that stick." },
-  { value: "garage_shed", label: "Garages & Sheds", cat: "Home", emoji: "🏠", color: "var(--pp-terracotta-light)", desc: "Reclaim your space — even the chaotic ones." },
-  { value: "dog_walking", label: "Dog Walking", cat: "Pet", emoji: "🐕", color: "var(--pp-sage-light)", span: "md:col-span-2", desc: "Daily walks, leash training, energy burn." },
-  { value: "pet_sitting", label: "Pet Sitting", cat: "Pet", emoji: "🐱", color: "var(--pp-pink)", desc: "Overnight or drop-in — at home, comfy." },
-  { value: "feeding_care", label: "Feeding & Care", cat: "Pet", emoji: "🍽️", color: "var(--pp-yellow)", desc: "Meals, meds, wellness check-ins." },
-  { value: "playtime", label: "Playtime", cat: "Pet", emoji: "🎾", color: "var(--pp-terracotta-light)", desc: "Mental stimulation, fetch, bonding." },
+  { value: "general_cleaning", label: "General Cleaning", cat: "Home", emoji: "🧹", iconClass: "svc-icon-green", desc: "Full home refresh — kitchens, bathrooms, floors, and surfaces spotless every visit." },
+  { value: "deep_cleaning", label: "Deep Cleaning", cat: "Home", emoji: "✨", iconClass: "svc-icon-green", desc: "Behind appliances, inside cabinets, grout lines — a thorough top-to-bottom reset." },
+  { value: "organizing", label: "Organizing", cat: "Home", emoji: "📦", iconClass: "svc-icon-green", desc: "Clutter-free spaces, sorted closets, and systems that actually stick long-term." },
+  { value: "garage_shed", label: "Garages & Sheds", cat: "Home", emoji: "🏠", iconClass: "svc-icon-green", desc: "Reclaim your garage. We sort, sweep, and organize even the most chaotic spaces." },
+  { value: "dog_walking", label: "Dog Walking", cat: "Pet", emoji: "🐕", iconClass: "svc-icon-warm", desc: "Daily walks, leash training, and exercise for dogs of all sizes and energy levels." },
+  { value: "pet_sitting", label: "Pet Sitting", cat: "Pet", emoji: "🐱", iconClass: "svc-icon-warm", desc: "In-home overnight or drop-in sitting — your pets stay comfortable in their own space." },
+  { value: "feeding_care", label: "Feeding & Care", cat: "Pet", emoji: "🍽️", iconClass: "svc-icon-warm", desc: "Regular feedings, fresh water, medication reminders, and wellness check-ins." },
+  { value: "playtime", label: "Playtime & Enrichment", cat: "Pet", emoji: "🎾", iconClass: "svc-icon-warm", desc: "Mental stimulation, toys, fetch, and bonding time to keep your pets happy and thriving." },
+];
+
+const BENEFITS = [
+  "Eco-friendly, pet-safe products",
+  "Flexible scheduling around your life",
+  "Garages, sheds & outdoor spaces too",
+  "Detailed checklists — nothing missed",
 ];
 
 const TESTIMONIALS = [
-  { name: "Sarah L.", role: "Dog mom · weekly cleaning", text: "My house has never felt so clean — and my dog Biscuit absolutely loves the team. Treat every visit.", pet: "🐶" },
-  { name: "Marcus R.", role: "Deep clean & garage", text: "They tackled my garage in one afternoon. I hadn't been able to park in it for two years. Life-changing.", pet: "🚗" },
-  { name: "Jamie T.", role: "Pet sitting client", text: "Photo updates the whole trip. My two cats were calm and happy when I got back. Already rebooked.", pet: "🐱" },
-  { name: "Priya K.", role: "Bi-weekly clean", text: "On time, every time. The squiggle in their schedule app is honestly adorable. 10/10.", pet: "✨" },
-  { name: "Devon M.", role: "Dog walking 3×/wk", text: "My Aussie comes home actually tired. The team knows him by name. Could not ask for more.", pet: "🐕" },
+  { name: "Sarah L.", role: "Dog mom & weekly cleaning client", text: "My house has never felt so clean — and my dog Biscuit absolutely loves the team. They bring him a treat every single visit. I can\u2019t recommend them enough!", initials: "SL" },
+  { name: "Marcus R.", role: "Deep clean & garage organizing", text: "They tackled my garage in one afternoon — I hadn\u2019t been able to park in it for two years. Now it\u2019s spotless and organized. Genuinely life-changing.", initials: "MR" },
+  { name: "Jamie T.", role: "Pet sitting client", text: "I was nervous to leave my two cats, but they sent photo updates the whole trip. My cats were calm and happy when I got back. Already rebooked for next month.", initials: "JT" },
 ];
 
 const STATS = [
-  { label: "Pet-safe products", value: "100%", icon: <Heart size={28} />, bg: "var(--pp-sage-light)" },
-  { label: "Local rating", value: "5★", icon: <Star size={28} />, bg: "var(--pp-yellow)" },
-  { label: "Same caregiver", value: "Always", icon: <Sparkles size={28} />, bg: "var(--pp-pink)" },
-  { label: "Fully insured", value: "Yes", icon: <ShieldCheck size={28} />, bg: "var(--pp-terracotta-light)" },
+  { value: "100%", label: "Pet-safe cleaning products used in every home" },
+  { value: "5★", label: "Consistently rated by happy local pet owners" },
+  { value: "Same", label: "Caregiver every visit — your pet knows us by name" },
+  { value: "Insured", label: "Fully covered so you can leave worry-free" },
 ];
 
-const stagger = { animate: { transition: { staggerChildren: 0.07 } } };
 const rise = {
-  initial: { opacity: 0, y: 24 },
-  animate: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 220, damping: 22 } },
+  initial: { opacity: 0, y: 18 },
+  whileInView: { opacity: 1, y: 0 },
+  viewport: { once: true, amount: 0.2 },
+  transition: { duration: 0.55, ease: [0.22, 1, 0.36, 1] },
 };
 
-function Header() {
+function Logo({ onDark = false }) {
   return (
-    <header className="sticky top-0 z-50 backdrop-blur-md" style={{ background: "rgba(250, 247, 242, 0.85)", borderBottom: "2px solid var(--pp-ink)" }}>
-      <div className="max-w-7xl mx-auto flex items-center justify-between px-6 md:px-12 py-4">
-        <a href="#top" className="flex items-center gap-2.5 font-heading font-black text-xl md:text-2xl tracking-tight" data-testid="brand-logo">
-          <PawSVG size={28} color="#E06D53" />
-          Pawfect <span className="text-[var(--pp-terracotta)]">&</span> Pristine
-        </a>
-        <nav className="hidden md:flex items-center gap-7 font-bold text-[var(--pp-ink-soft)]">
-          <a href="#services" className="hover:text-[var(--pp-terracotta)] transition-colors" data-testid="nav-services">Services</a>
-          <a href="#eta" className="hover:text-[var(--pp-terracotta)] transition-colors" data-testid="nav-eta">ETA</a>
-          <a href="#reviews" className="hover:text-[var(--pp-terracotta)] transition-colors" data-testid="nav-reviews">Reviews</a>
-        </nav>
-        <a href="#book" data-testid="header-book-cta">
-          <GhostButton>Book a visit</GhostButton>
-        </a>
+    <a href="#top" className="flex items-center gap-2.5" data-testid="brand-logo">
+      <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: onDark ? "var(--green-pale)" : "var(--green)", color: onDark ? "var(--green-dark)" : "#fff" }}>
+        <span className="text-lg leading-none">🐾</span>
       </div>
-    </header>
+      <div className="flex flex-col leading-tight">
+        <span className="font-serif text-[18px] font-bold" style={{ color: onDark ? "#c8e8d8" : "var(--green-dark)" }}>Pawfect &amp; Pristine</span>
+        <span className="text-[9px] uppercase tracking-[0.18em] font-medium" style={{ color: onDark ? "var(--green-pale)" : "var(--green-muted)" }}>Home & Pet Services</span>
+      </div>
+    </a>
+  );
+}
+
+function Nav() {
+  return (
+    <nav className="sticky top-0 z-50 bg-white border-b border-[#f0ede8] px-6 md:px-12 h-16 flex items-center justify-between">
+      <Logo />
+      <div className="hidden md:flex items-center gap-7 text-[13px] font-medium">
+        <a href="#services" className="link-underline" data-testid="nav-services">Services</a>
+        <a href="#about" className="link-underline" data-testid="nav-about">About</a>
+        <a href="#eta" className="link-underline" data-testid="nav-eta">ETA</a>
+        <a href="#reviews" className="link-underline" data-testid="nav-reviews">Reviews</a>
+      </div>
+      <a href="#book" data-testid="header-book-cta"><PrimaryButton testid="header-book-btn">Book a Visit</PrimaryButton></a>
+    </nav>
   );
 }
 
 function Hero() {
   return (
-    <section id="top" className="relative overflow-hidden px-6 md:px-12 lg:px-24 pt-12 md:pt-20 pb-16 md:pb-24">
-      {/* Background squiggles */}
-      <svg className="absolute -top-10 -left-10 opacity-50 pointer-events-none" width="280" height="200" viewBox="0 0 280 200" aria-hidden>
-        <path d="M10 60 Q 50 10 90 60 T 170 60 T 250 60" stroke="#E06D53" strokeWidth="4" fill="none" strokeLinecap="round" />
-        <path d="M30 120 Q 70 70 110 120 T 190 120 T 270 120" stroke="#89A894" strokeWidth="4" fill="none" strokeLinecap="round" />
-      </svg>
-      <div className="absolute top-10 right-10 float-paw" style={{ "--rot": "20deg" }}><PawSVG size={48} color="#89A894" /></div>
-      <div className="absolute bottom-10 left-20 float-paw" style={{ "--rot": "-12deg", animationDelay: "1.2s" }}><PawSVG size={36} color="#E06D53" /></div>
-
-      <div className="max-w-7xl mx-auto grid lg:grid-cols-12 gap-10 lg:gap-14 items-center">
-        <motion.div variants={stagger} initial="initial" animate="animate" className="lg:col-span-7">
-          <motion.div variants={rise}>
-            <span className="sticker"><MapPin size={14} /> Decatur · East Atlanta</span>
-          </motion.div>
-          <motion.h1 variants={rise} className="font-heading font-black tracking-tighter text-5xl sm:text-6xl md:text-7xl lg:text-[5.5rem] leading-[0.95] mt-5">
-            Clean home.
-            <br />
-            <span className="italic font-normal" style={{ fontFamily: "'Bricolage Grotesque', serif" }}>
-              <span className="squiggle-underline">Happy paws.</span>
-            </span>
+    <section id="top" className="relative">
+      <div className="grid lg:grid-cols-2 min-h-[560px]">
+        {/* Left */}
+        <div className="hero-gradient px-6 md:px-12 lg:px-16 py-16 md:py-24 flex flex-col justify-center">
+          <motion.span {...rise} className="eyebrow">Local Home &amp; Pet Services · Decatur &amp; East Atlanta</motion.span>
+          <motion.h1
+            {...rise}
+            transition={{ ...rise.transition, delay: 0.05 }}
+            className="font-serif text-[42px] md:text-[58px] lg:text-[64px] font-bold leading-[1.05] tracking-tight mt-5 text-[var(--green-dark)]"
+          >
+            Clean home,<br />
+            <span className="italic-green">Happy Paws.</span>
           </motion.h1>
-          <motion.p variants={rise} className="text-[var(--pp-ink-soft)] mt-6 text-lg md:text-xl font-semibold max-w-xl leading-relaxed">
-            Local home cleaning + heartfelt pet care, under one roof. We scrub. We snuggle. You relax.
+          <motion.p {...rise} transition={{ ...rise.transition, delay: 0.1 }} className="mt-5 max-w-md text-[15px] leading-[1.7] text-[#4a6a57]">
+            A clean home and a happy pet makes a better day — every single day. We handle the scrubbing and the snuggling so you don&rsquo;t have to.
           </motion.p>
-          <motion.div variants={rise} className="flex flex-wrap gap-3 mt-8">
-            <a href="#book" data-testid="hero-book-cta"><PrimaryButton>Book a visit 🐾</PrimaryButton></a>
-            <a href="#services" data-testid="hero-services-cta"><GhostButton>See services</GhostButton></a>
+          <motion.div {...rise} transition={{ ...rise.transition, delay: 0.15 }} className="flex flex-wrap gap-3 mt-8">
+            <a href="#book" data-testid="hero-book-cta"><PrimaryButton testid="hero-book-btn">Book a Visit</PrimaryButton></a>
+            <a href="#services" data-testid="hero-services-cta"><OutlineButton testid="hero-services-btn">Our Services</OutlineButton></a>
           </motion.div>
-          <motion.div variants={rise} className="flex flex-wrap items-center gap-2.5 mt-8">
-            <span className="sticker" style={{ background: "var(--pp-sage-light)" }}>🏡 Locally owned</span>
-            <span className="sticker" style={{ background: "var(--pp-pink)" }}>✓ Pet-safe products</span>
-            <span className="sticker" style={{ background: "var(--pp-yellow)" }}>★★★★★ 5.0</span>
-          </motion.div>
-        </motion.div>
+        </div>
 
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9, rotate: 4 }}
-          animate={{ opacity: 1, scale: 1, rotate: -2 }}
-          transition={{ type: "spring", stiffness: 180, damping: 18, delay: 0.1 }}
-          className="lg:col-span-5 relative"
-        >
-          <div className="relative rounded-[36px] overflow-hidden border-2 border-ink shadow-pop-lg" style={{ transform: "rotate(2deg)" }}>
-            <img src={HERO_DOG} alt="Happy dog on a clean couch" className="w-full h-[420px] md:h-[520px] object-cover" />
-            <div className="absolute top-4 left-4">
-              <span className="sticker" style={{ background: "var(--pp-pink)" }}>🐾 Biscuit, regular client</span>
-            </div>
-          </div>
-          {/* Floating sticker */}
+        {/* Right */}
+        <div className="relative bg-[var(--green-light)] overflow-hidden">
+          <motion.img
+            initial={{ scale: 1.05, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ duration: 1, ease: [0.22, 1, 0.36, 1] }}
+            src={IMG.heroDog}
+            alt="Happy dog on a clean couch"
+            className="absolute inset-0 w-full h-full object-cover"
+          />
           <motion.div
-            animate={{ y: [0, -8, 0] }}
-            transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-            className="absolute -bottom-6 -left-4 md:-left-10 bg-white border-2 border-ink rounded-2xl px-5 py-3 shadow-pop-lg rotate-[-6deg]"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5, duration: 0.5 }}
+            className="absolute bottom-6 left-6 hero-badge"
           >
-            <div className="font-heading font-black text-2xl leading-none">~18 min</div>
-            <div className="text-xs uppercase font-extrabold tracking-wider text-[var(--pp-muted)]">avg arrival</div>
+            <span className="dot" /> Locally owned &amp; operated 🏡
           </motion.div>
-          <motion.div
-            animate={{ y: [0, 8, 0] }}
-            transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut", delay: 0.5 }}
-            className="absolute -top-5 -right-3 md:-right-8 bg-[var(--pp-sage)] text-white border-2 border-ink rounded-full px-4 py-2 shadow-pop rotate-[8deg]"
-          >
-            <div className="font-heading font-black text-sm">Wags + sparkles ✨</div>
-          </motion.div>
-        </motion.div>
+        </div>
+      </div>
+
+      {/* Service strip */}
+      <div className="border-y border-[var(--border)] bg-white">
+        <div className="max-w-6xl mx-auto px-6 md:px-12 py-5 flex flex-wrap items-center justify-center gap-x-8 gap-y-2 text-[12px] font-medium text-[var(--text-muted)]">
+          {["🧹 Home Cleaning", "🐕 Dog Walking", "🐱 Pet Sitting", "📦 Organizing", "🏠 Garages & Sheds", "🐾 Play & Care"].map((s, i) => (
+            <React.Fragment key={s}>
+              {i > 0 && <span className="w-1 h-1 rounded-full bg-[var(--green-pale)]" />}
+              <span>{s}</span>
+            </React.Fragment>
+          ))}
+        </div>
       </div>
     </section>
   );
@@ -134,21 +143,19 @@ function Hero() {
 
 function Services() {
   return (
-    <section id="services" className="px-6 md:px-12 lg:px-24 py-16 md:py-24">
-      <div className="max-w-7xl mx-auto">
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-10">
-          <div>
-            <span className="sticker"><Sparkles size={14} /> What we do</span>
-            <h2 className="font-heading text-4xl md:text-6xl font-black mt-4 leading-[1.02] tracking-tight">
-              Two things we love — <span className="squiggle-underline">done right.</span>
-            </h2>
-          </div>
-          <p className="text-[var(--pp-ink-soft)] font-semibold max-w-md text-lg">
-            Expert home cleaning & heartfelt pet care, scheduled around your week.
+    <section id="services" className="px-6 md:px-12 py-20 md:py-28">
+      <div className="max-w-6xl mx-auto">
+        <motion.div {...rise} className="text-center mb-12">
+          <span className="eyebrow">What We Do</span>
+          <h2 className="font-serif text-3xl md:text-[44px] font-bold mt-3 text-[var(--green-dark)] leading-tight">
+            Two things we love — <span className="italic-green">done right</span>
+          </h2>
+          <p className="text-[var(--text-muted)] mt-3 text-[15px] max-w-xl mx-auto leading-relaxed">
+            Expert home cleaning &amp; heartfelt pet care, under one roof.
           </p>
-        </div>
+        </motion.div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 md:gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
           {SERVICES.map((s, i) => (
             <motion.a
               href="#book"
@@ -156,22 +163,89 @@ function Services() {
               data-testid={`service-card-${s.value}`}
               initial={{ opacity: 0, y: 24 }}
               whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, amount: 0.2 }}
-              transition={{ delay: i * 0.05, type: "spring", stiffness: 200, damping: 20 }}
-              whileHover={{ scale: 1.02, rotate: i % 2 === 0 ? -1 : 1, y: -6 }}
-              className={`group rounded-3xl border-2 border-ink shadow-pop p-6 md:p-7 cursor-pointer ${s.span || ""}`}
-              style={{ background: s.color }}
+              viewport={{ once: true, amount: 0.15 }}
+              transition={{ delay: i * 0.04, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+              className="card-clean group"
             >
-              <div className="flex items-start justify-between">
-                <div className="text-5xl md:text-6xl wiggle-on-hover">{s.emoji}</div>
-                <span className="text-xs font-extrabold uppercase tracking-widest text-[var(--pp-ink-soft)]">{s.cat}</span>
-              </div>
-              <h3 className="font-heading font-black text-2xl md:text-3xl mt-4 leading-tight">{s.label}</h3>
-              <p className="text-[var(--pp-ink-soft)] mt-2 font-semibold">{s.desc}</p>
-              <div className="mt-5 inline-flex items-center gap-1 font-extrabold text-[var(--pp-ink)] group-hover:gap-3 transition-all">
-                Book it <span>→</span>
-              </div>
+              <div className={`svc-icon ${s.iconClass} transition-transform group-hover:scale-110`}>{s.emoji}</div>
+              <h3 className="mt-4 font-semibold text-[15px] text-[var(--text)]">{s.label}</h3>
+              <p className="mt-2 text-[13px] leading-[1.6] text-[var(--text-muted)]">{s.desc}</p>
+              <span className={`tag ${s.cat === "Home" ? "tag-home" : "tag-pet"} mt-4`}>{s.cat}</span>
             </motion.a>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function SplitHome() {
+  return (
+    <section id="about" className="px-6 md:px-12 py-20 md:py-24 bg-[var(--bg-soft)]">
+      <div className="max-w-6xl mx-auto grid lg:grid-cols-2 gap-10 lg:gap-16 items-center">
+        <motion.div {...rise} className="rounded-2xl overflow-hidden">
+          <img src={IMG.cleanHome} alt="Clean bright living room" className="w-full h-[360px] md:h-[460px] object-cover" />
+        </motion.div>
+        <motion.div {...rise} transition={{ ...rise.transition, delay: 0.1 }}>
+          <span className="eyebrow">Home Cleaning</span>
+          <h2 className="font-serif text-3xl md:text-[40px] font-bold mt-3 text-[var(--green-dark)] leading-tight">
+            Your home, <span className="italic-green">always at its best.</span>
+          </h2>
+          <p className="text-[var(--text-muted)] mt-4 text-[15px] leading-[1.7] max-w-md">
+            From regular maintenance cleans to one-time deep cleans before guests arrive — we show up reliably and leave everything shining.
+          </p>
+          <ul className="mt-6 space-y-3">
+            {BENEFITS.map((b) => (
+              <li key={b} className="flex items-start gap-3 text-[14px] text-[var(--text-soft)]">
+                <span className="mt-0.5 w-5 h-5 rounded-full flex items-center justify-center" style={{ background: "var(--green-light)", color: "var(--green)" }}>
+                  <Check size={12} strokeWidth={3} />
+                </span>
+                {b}
+              </li>
+            ))}
+          </ul>
+          <div className="mt-7">
+            <a href="#book"><PrimaryButton testid="split-book-btn">Book a Cleaning Visit</PrimaryButton></a>
+          </div>
+        </motion.div>
+      </div>
+    </section>
+  );
+}
+
+function PetsBlock() {
+  return (
+    <section className="px-6 md:px-12 py-20 md:py-24">
+      <div className="max-w-6xl mx-auto">
+        <motion.div {...rise} className="text-center mb-10">
+          <span className="eyebrow">Pet Services</span>
+          <h2 className="font-serif text-3xl md:text-[40px] font-bold mt-3 text-[var(--green-dark)] leading-tight">
+            Your pets are family. <span className="italic-green">We treat them that way.</span>
+          </h2>
+          <p className="text-[var(--text-muted)] mt-3 text-[15px] max-w-xl mx-auto leading-relaxed">
+            Every visit is filled with patience, love, and lots of tail wags.
+          </p>
+        </motion.div>
+
+        <div className="grid sm:grid-cols-3 gap-5">
+          {[
+            { src: IMG.dogWalk, label: "🐕 Dog Walking" },
+            { src: IMG.catDog, label: "🐾 Pet Sitting" },
+            { src: IMG.puppy, label: "🎾 Playtime" },
+          ].map((p, i) => (
+            <motion.div
+              key={p.label}
+              initial={{ opacity: 0, y: 18 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, amount: 0.2 }}
+              transition={{ delay: i * 0.06, duration: 0.5 }}
+              className="relative rounded-2xl overflow-hidden aspect-square group"
+            >
+              <img src={p.src} alt={p.label} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+              <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/55 via-black/15 to-transparent">
+                <span className="text-white font-medium text-[14px]">{p.label}</span>
+              </div>
+            </motion.div>
           ))}
         </div>
       </div>
@@ -181,22 +255,19 @@ function Services() {
 
 function Stats() {
   return (
-    <section className="px-6 md:px-12 lg:px-24 py-14">
-      <div className="max-w-7xl mx-auto grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+    <section className="px-6 md:px-12 py-16 bg-[var(--green-light)]">
+      <div className="max-w-6xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-6 md:gap-8">
         {STATS.map((s, i) => (
           <motion.div
             key={s.label}
-            initial={{ opacity: 0, y: 18 }}
+            initial={{ opacity: 0, y: 14 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            transition={{ delay: i * 0.06 }}
-            whileHover={{ y: -4, rotate: i % 2 === 0 ? -1 : 1 }}
-            className="rounded-3xl border-2 border-ink p-6 shadow-pop"
-            style={{ background: s.bg }}
+            transition={{ delay: i * 0.06, duration: 0.5 }}
+            className="text-center"
           >
-            <div className="text-[var(--pp-ink)]">{s.icon}</div>
-            <div className="font-heading font-black text-3xl md:text-4xl mt-2 leading-none">{s.value}</div>
-            <div className="text-xs md:text-sm font-extrabold uppercase tracking-wider text-[var(--pp-ink-soft)] mt-2">{s.label}</div>
+            <div className="font-serif text-[36px] md:text-[44px] font-bold text-[var(--green-dark)] leading-none">{s.value}</div>
+            <div className="text-[12px] text-[var(--text-muted)] mt-2 leading-snug max-w-[200px] mx-auto">{s.label}</div>
           </motion.div>
         ))}
       </div>
@@ -205,31 +276,39 @@ function Stats() {
 }
 
 function Testimonials() {
-  const items = [...TESTIMONIALS, ...TESTIMONIALS];
   return (
-    <section id="reviews" className="py-16 md:py-24 overflow-hidden">
-      <div className="max-w-7xl mx-auto px-6 md:px-12 lg:px-24">
-        <div className="text-center mb-10">
-          <span className="sticker"><Heart size={14} /> Neighbors love us</span>
-          <h2 className="font-heading text-4xl md:text-6xl font-black mt-4 leading-[1.02] tracking-tight">
-            Real words from <span className="squiggle-underline">real clients.</span>
+    <section id="reviews" className="px-6 md:px-12 py-20 md:py-28">
+      <div className="max-w-6xl mx-auto">
+        <motion.div {...rise} className="text-center mb-12">
+          <span className="eyebrow">Happy Clients</span>
+          <h2 className="font-serif text-3xl md:text-[44px] font-bold mt-3 text-[var(--green-dark)] leading-tight">
+            Neighbors love us. <span className="italic-green">So do their pets.</span>
           </h2>
-        </div>
-      </div>
-      <div className="relative" data-testid="testimonials-marquee">
-        <div className="marquee-track">
-          {items.map((t, i) => (
-            <div key={i} className="w-[340px] md:w-[400px] shrink-0 rounded-3xl border-2 border-ink bg-white shadow-pop p-6 md:p-7" style={{ transform: i % 2 === 0 ? "rotate(-1deg)" : "rotate(1deg)" }}>
-              <div className="text-2xl">★★★★★</div>
-              <p className="mt-3 font-bold text-[var(--pp-ink-soft)] leading-relaxed">&ldquo;{t.text}&rdquo;</p>
+          <p className="text-[var(--text-muted)] mt-3 text-[15px] max-w-xl mx-auto leading-relaxed">
+            Real words from real clients in our community.
+          </p>
+        </motion.div>
+
+        <div className="grid md:grid-cols-3 gap-5" data-testid="testimonials-grid">
+          {TESTIMONIALS.map((t, i) => (
+            <motion.div
+              key={t.name}
+              initial={{ opacity: 0, y: 18 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, amount: 0.2 }}
+              transition={{ delay: i * 0.08, duration: 0.55 }}
+              className="testi-card"
+            >
+              <div className="stars">★★★★★</div>
+              <p className="mt-3 text-[13px] italic leading-[1.7] text-[var(--text-soft)]">&ldquo;{t.text}&rdquo;</p>
               <div className="mt-5 flex items-center gap-3">
-                <div className="w-11 h-11 rounded-full border-2 border-ink flex items-center justify-center text-2xl" style={{ background: "var(--pp-pink)" }}>{t.pet}</div>
+                <div className="testi-avatar">{t.initials}</div>
                 <div>
-                  <div className="font-heading font-black">{t.name}</div>
-                  <div className="text-xs uppercase font-extrabold tracking-wider text-[var(--pp-muted)]">{t.role}</div>
+                  <div className="text-[14px] font-semibold text-[var(--text)]">{t.name}</div>
+                  <div className="text-[11px] text-[var(--text-muted)] mt-0.5">{t.role}</div>
                 </div>
               </div>
-            </div>
+            </motion.div>
           ))}
         </div>
       </div>
@@ -237,21 +316,24 @@ function Testimonials() {
   );
 }
 
-function CTA() {
+function FinalCTA() {
   return (
-    <section className="px-6 md:px-12 lg:px-24 py-12">
-      <div className="max-w-5xl mx-auto rounded-[36px] border-2 border-ink p-10 md:p-16 text-center shadow-pop-lg relative overflow-hidden" style={{ background: "var(--pp-terracotta)" }}>
-        <div className="absolute top-6 left-6 float-paw" style={{ "--rot": "-20deg" }}><PawSVG size={36} color="#FAF7F2" /></div>
-        <div className="absolute bottom-6 right-6 float-paw" style={{ "--rot": "18deg", animationDelay: ".8s" }}><PawSVG size={42} color="#FAF7F2" /></div>
-        <h3 className="font-heading text-4xl md:text-6xl font-black text-white leading-[1.02] tracking-tight">
-          Ready for a cleaner home<br />& a happier pet?
+    <section className="px-6 md:px-12 py-16">
+      <div className="max-w-5xl mx-auto cta-gradient rounded-[28px] p-10 md:p-16 text-center text-white">
+        <span className="text-[11px] uppercase tracking-[0.18em] font-semibold text-[var(--green-pale)]">Let&rsquo;s Get Started</span>
+        <h3 className="font-serif text-3xl md:text-[44px] font-bold mt-3 leading-[1.1]">
+          Ready for a cleaner home<br />&amp; a happier pet?
         </h3>
-        <p className="text-white/90 mt-4 font-semibold text-lg max-w-xl mx-auto">
-          Book your first visit today. No contracts. Just sparkle and snuggles.
+        <p className="text-white/85 mt-4 max-w-xl mx-auto text-[15px] leading-relaxed">
+          Book your first visit today — no contracts, no stress. Just a cleaner home and a pet who can&rsquo;t wait for us to come back.
         </p>
         <div className="mt-7 flex flex-wrap gap-3 justify-center">
-          <a href="#book" data-testid="cta-book"><GhostButton>Book a visit →</GhostButton></a>
-          <a href="tel:+14703814682" data-testid="cta-call"><GhostButton><Phone size={16} /> (470) 381-4682</GhostButton></a>
+          <a href="#book" data-testid="cta-book">
+            <motion.button whileHover={{ y: -1 }} whileTap={{ scale: 0.97 }} className="btn-white">
+              Book a Visit
+            </motion.button>
+          </a>
+          <a href="#services" data-testid="cta-services"><GhostWhiteButton>View Services</GhostWhiteButton></a>
         </div>
       </div>
     </section>
@@ -259,29 +341,44 @@ function CTA() {
 }
 
 function Footer() {
+  const cols = [
+    { title: "Home Services", links: ["General Cleaning", "Deep Cleaning", "Organizing", "Garages & Sheds"] },
+    { title: "Pet Care", links: ["Dog Walking", "Pet Sitting", "Feeding & Care", "Playtime"] },
+  ];
   return (
-    <footer className="mt-10 border-t-2 border-ink" style={{ background: "var(--pp-cream)" }}>
-      <div className="hand-divider" />
-      <div className="max-w-7xl mx-auto px-6 md:px-12 lg:px-24 py-10 md:py-14 grid md:grid-cols-3 gap-8">
+    <footer style={{ background: "var(--green-deep-bg)" }} className="text-[#c8e8d8] mt-10">
+      <div className="max-w-6xl mx-auto px-6 md:px-12 py-14 grid md:grid-cols-4 gap-10">
         <div>
-          <div className="flex items-center gap-2 font-heading font-black text-2xl">
-            <PawSVG size={28} color="#E06D53" /> Pawfect & Pristine
+          <Logo onDark />
+          <p className="mt-4 text-[13px] leading-[1.7] text-[#7a9e8a] max-w-xs">
+            A clean home &amp; happy pet makes a better day. Locally owned, serving Decatur &amp; East Atlanta.
+          </p>
+        </div>
+        {cols.map((col) => (
+          <div key={col.title}>
+            <h4 className="text-[12px] font-semibold uppercase tracking-[0.12em] text-[#7aaa90]">{col.title}</h4>
+            <ul className="mt-4 space-y-2.5">
+              {col.links.map((l) => (
+                <li key={l}><a href="#services" className="text-[13px] text-[#6b8878] hover:text-[var(--green-pale)] transition-colors">{l}</a></li>
+              ))}
+            </ul>
           </div>
-          <p className="mt-3 font-semibold text-[var(--pp-ink-soft)]">Clean homes. Happy paws. Local love.</p>
-        </div>
+        ))}
         <div>
-          <div className="font-extrabold uppercase tracking-wider text-sm text-[var(--pp-muted)]">Contact</div>
-          <a href="tel:+14703814682" className="flex items-center gap-2 mt-2 font-bold hover:text-[var(--pp-terracotta)]"><Phone size={16} /> (470) 381-4682</a>
-          <a href="mailto:hello@pawfectpristine.local" className="flex items-center gap-2 mt-2 font-bold hover:text-[var(--pp-terracotta)]"><Mail size={16} /> hello@pawfectpristine.local</a>
-          <div className="flex items-center gap-2 mt-2 font-bold"><MapPin size={16} /> Decatur · East Atlanta</div>
-        </div>
-        <div>
-          <div className="font-extrabold uppercase tracking-wider text-sm text-[var(--pp-muted)]">Service area</div>
-          <p className="mt-2 font-semibold text-[var(--pp-ink-soft)]">0–7 mi: standard<br />7–13 mi: +$20 travel<br />13+ mi: call for a quote</p>
+          <h4 className="text-[12px] font-semibold uppercase tracking-[0.12em] text-[#7aaa90]">Contact</h4>
+          <ul className="mt-4 space-y-2.5 text-[13px] text-[#6b8878]">
+            <li><a href="tel:+14703814682" className="flex items-center gap-2 hover:text-[var(--green-pale)] transition-colors"><Phone size={14} /> (470) 381-4682</a></li>
+            <li><a href="mailto:hello@pawfectpristine.local" className="flex items-center gap-2 hover:text-[var(--green-pale)] transition-colors"><Mail size={14} /> hello@pawfectpristine.local</a></li>
+            <li className="flex items-center gap-2"><MapPin size={14} /> Decatur · East Atlanta</li>
+            <li><a href="#book" className="flex items-center gap-2 hover:text-[var(--green-pale)] transition-colors"><Calendar size={14} /> Book a Visit</a></li>
+          </ul>
         </div>
       </div>
-      <div className="text-center text-xs uppercase tracking-widest font-extrabold text-[var(--pp-muted)] py-5 border-t border-ink/20">
-        © {new Date().getFullYear()} Pawfect & Pristine · Made with 🐾 in Decatur
+      <div className="border-t border-[#1a2f24]">
+        <div className="max-w-6xl mx-auto px-6 md:px-12 py-5 flex flex-wrap items-center justify-between gap-3 text-[11px] text-[#5d7a6b]">
+          <div>© {new Date().getFullYear()} Pawfect &amp; Pristine. All rights reserved.</div>
+          <div>Made with 🐾 for pets &amp; their people.</div>
+        </div>
       </div>
     </footer>
   );
@@ -289,16 +386,18 @@ function Footer() {
 
 export default function App() {
   return (
-    <div className="App font-body">
-      <Header />
+    <div className="App font-sans">
+      <Nav />
       <main>
         <Hero />
         <Services />
+        <SplitHome />
+        <PetsBlock />
         <Stats />
         <EtaCalculator />
         <Testimonials />
         <BookingForm />
-        <CTA />
+        <FinalCTA />
       </main>
       <Footer />
     </div>
