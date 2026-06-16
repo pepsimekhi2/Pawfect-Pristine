@@ -8,6 +8,7 @@ import re
 import logging
 import uuid
 import httpx
+from urllib.parse import quote_plus
 from fastapi import FastAPI, APIRouter, HTTPException, Request, Depends, Response
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -19,7 +20,7 @@ from twilio.rest import Client as TwilioClient
 from auth_utils import (
     hash_password, verify_password, create_access_token, decode_token, extract_token
 )
-from pricing import compute_quote, get_public_catalog, SERVICE_CATALOG, generate_time_slots, is_time_in_window, BOOKING_TIME_MIN, BOOKING_TIME_MAX
+from pricing import compute_quote, get_public_catalog, SERVICE_CATALOG, generate_time_slots, is_time_in_window, BOOKING_TIME_MIN, BOOKING_TIME_MAX, get_service_duration, hhmm_to_minutes, window_minutes
 from tos import TOS_TEXT, TOS_VERSION, TOS_EFFECTIVE
 import firebase_sync as fb
 import asyncio
@@ -37,6 +38,7 @@ ORIGIN_LON = float(os.environ.get('ORIGIN_LON', '-84.2963'))
 ORIGIN_LABEL = os.environ.get('ORIGIN_LABEL', 'Decatur, GA')
 ADMIN_EMAIL = os.environ.get('ADMIN_EMAIL')
 ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD')
+ADMIN_PASSPHRASE = os.environ.get('ADMIN_PASSPHRASE', 'duck')
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
@@ -187,9 +189,13 @@ async def check_brute_force(identifier: str):
     rec = await db.login_attempts.find_one({"identifier": identifier})
     if rec and rec.get("count", 0) >= 5:
         locked_until = rec.get("locked_until")
-        if locked_until and locked_until > datetime.now(timezone.utc):
-            mins = max(1, int((locked_until - datetime.now(timezone.utc)).total_seconds() / 60))
-            raise HTTPException(status_code=429, detail=f"Too many attempts. Try again in {mins} min.")
+        if locked_until:
+            # Mongo returns naive UTC datetimes; normalize for safe comparison.
+            if locked_until.tzinfo is None:
+                locked_until = locked_until.replace(tzinfo=timezone.utc)
+            if locked_until > datetime.now(timezone.utc):
+                mins = max(1, int((locked_until - datetime.now(timezone.utc)).total_seconds() / 60))
+                raise HTTPException(status_code=429, detail=f"Too many attempts. Try again in {mins} min.")
 
 
 async def record_failed_login(identifier: str):
@@ -205,6 +211,42 @@ async def record_failed_login(identifier: str):
 
 async def clear_attempts(identifier: str):
     await db.login_attempts.delete_one({"identifier": identifier})
+
+
+async def get_blocked_minutes_for_date(date_iso: str, exclude_booking_id: Optional[str] = None) -> set:
+    """Return set of all minute-of-day values blocked by existing bookings on that date.
+    Honors each booking's service duration."""
+    query = {
+        "preferred_date": date_iso,
+        "status": {"$nin": ["cancelled", "completed"]},
+    }
+    if exclude_booking_id:
+        query["id"] = {"$ne": exclude_booking_id}
+    docs = await db.bookings.find(
+        query,
+        {"_id": 0, "preferred_time": 1, "service_value": 1, "tier_key": 1, "duration_minutes": 1},
+    ).to_list(500)
+    blocked = set()
+    for d in docs:
+        t = d.get("preferred_time")
+        if not t:
+            continue
+        try:
+            start = hhmm_to_minutes(t)
+        except Exception:
+            continue
+        dur = d.get("duration_minutes") or get_service_duration(d.get("service_value"), d.get("tier_key"))
+        for m in range(start, start + dur, 30):
+            blocked.add(m)
+    return blocked
+
+
+def slot_conflicts(start_min: int, duration_min: int, blocked: set) -> bool:
+    """True if any 30-min step within [start, start+duration) overlaps a blocked minute."""
+    for m in range(start_min, start_min + duration_min, 30):
+        if m in blocked:
+            return True
+    return False
 
 
 def _to_user_out(user: dict) -> UserOut:
@@ -277,6 +319,36 @@ async def me(user: dict = Depends(get_current_user)):
     return {"user": _to_user_out(user).model_dump()}
 
 
+class AdminPassphrasePayload(BaseModel):
+    passphrase: str
+
+
+@auth_router.post("/admin-passphrase")
+async def admin_passphrase_login(payload: AdminPassphrasePayload, request: Request, response: Response):
+    """Quick-access admin login via a shared passphrase (e.g. 'duck').
+    Brute-force protected. Returns the seeded admin's JWT on success."""
+    ip = request.client.host if request.client else "unknown"
+    identifier = f"{ip}:admin-passphrase"
+    await check_brute_force(identifier)
+
+    submitted = (payload.passphrase or "").strip()
+    if not submitted or submitted.lower() != (ADMIN_PASSPHRASE or "").strip().lower():
+        await record_failed_login(identifier)
+        raise HTTPException(status_code=401, detail="Incorrect passphrase.")
+
+    if not ADMIN_EMAIL:
+        raise HTTPException(status_code=500, detail="Admin not configured.")
+    admin = await db.users.find_one({"email": ADMIN_EMAIL.lower(), "role": "admin"})
+    if not admin:
+        raise HTTPException(status_code=500, detail="Admin user missing — restart backend to reseed.")
+
+    await clear_attempts(identifier)
+    token = create_access_token(admin["id"], admin["email"])
+    response.set_cookie(key="access_token", value=token, httponly=True, secure=False, samesite="lax",
+                        max_age=60 * 60 * 24 * 7, path="/")
+    return {"user": _to_user_out(admin).model_dump(), "token": token}
+
+
 # ============= Public/General Routes =============
 @api_router.get("/")
 async def root():
@@ -334,17 +406,25 @@ async def create_booking(payload: BookingCreate, request: Request):
             detail=f"Bookings are only available between {BOOKING_TIME_MIN} and {BOOKING_TIME_MAX}."
         )
 
-    # Prevent double-booking the same date+time
+    # Determine duration & validate availability via overlap check
+    duration_min = get_service_duration(payload.service_value, payload.tier_key)
     if payload.preferred_date and payload.preferred_time:
-        existing = await db.bookings.find_one({
-            "preferred_date": payload.preferred_date,
-            "preferred_time": payload.preferred_time,
-            "status": {"$nin": ["cancelled", "completed"]},
-        })
-        if existing:
+        try:
+            start_min = hhmm_to_minutes(payload.preferred_time)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid time.")
+        # Service must fit before the close-of-day window
+        _wmin_start, wmin_end = window_minutes()
+        if start_min + duration_min > wmin_end + 30:  # allow last slot to end up to 30 min after max
+            raise HTTPException(
+                status_code=400,
+                detail=f"This service needs {duration_min} min. Pick an earlier time — we close at {BOOKING_TIME_MAX}."
+            )
+        blocked = await get_blocked_minutes_for_date(payload.preferred_date)
+        if slot_conflicts(start_min, duration_min, blocked):
             raise HTTPException(
                 status_code=409,
-                detail="That time slot is already booked. Please pick another time."
+                detail="That time slot overlaps another booking. Please pick a different time."
             )
 
     quote_data = compute_quote(payload.service_value, payload.tier_key, payload.preferred_date)
@@ -392,6 +472,7 @@ async def create_booking(payload: BookingCreate, request: Request):
         "access_notes": payload.access_notes,
         "preferred_date": payload.preferred_date,
         "preferred_time": payload.preferred_time,
+        "duration_minutes": duration_min,
         "quote": quote_data,
         "travel_fee": travel_fee,
         "grand_total": grand_total,
@@ -514,21 +595,27 @@ async def recent_bookings(limit: int = 20):
 
 # ============= Availability =============
 @api_router.get("/availability")
-async def availability(date: str):
-    """Return list of all time slots and which ones are taken for a given date."""
+async def availability(date: str, service: Optional[str] = None, tier: Optional[str] = None):
+    """Return list of all time slots with `taken` and `too_late` flags for the given date.
+    `service`+`tier` (optional) are used to compute slots that would push past closing time."""
     if not date:
         raise HTTPException(status_code=400, detail="date is required (YYYY-MM-DD)")
     slots = generate_time_slots()
-    taken_docs = await db.bookings.find(
-        {"preferred_date": date, "status": {"$nin": ["cancelled", "completed"]}},
-        {"_id": 0, "preferred_time": 1},
-    ).to_list(200)
-    taken = {d.get("preferred_time") for d in taken_docs if d.get("preferred_time")}
+    blocked = await get_blocked_minutes_for_date(date)
+    duration_min = get_service_duration(service, tier) if service else 30
+    _wmin_start, wmin_end = window_minutes()
+    out = []
+    for s in slots:
+        smin = hhmm_to_minutes(s)
+        taken = slot_conflicts(smin, duration_min, blocked)
+        too_late = (smin + duration_min) > (wmin_end + 30)
+        out.append({"time": s, "taken": taken, "too_late": too_late})
     return {
         "date": date,
         "min_time": BOOKING_TIME_MIN,
         "max_time": BOOKING_TIME_MAX,
-        "slots": [{"time": s, "taken": s in taken} for s in slots],
+        "duration_minutes": duration_min,
+        "slots": out,
     }
 
 
@@ -614,7 +701,7 @@ async def admin_notify_otw(booking_id: str, _admin: dict = Depends(require_admin
     asyncio.create_task(fb.patch(f"bookings/{booking_id}", {"status": "on_the_way", "otw_notified_at": now}))
     return {"ok": True, "sms_sent": sms_sent, "sms_body": sms_body if not sms_sent else None,
             "tel_link": f"tel:{booking.get('phone')}",
-            "sms_link": f"sms:{booking.get('phone')}?body={sms_body.replace(' ', '%20')}"}
+            "sms_link": f"sms:{booking.get('phone')}?&body={quote_plus(sms_body)}"}
 
 
 @api_router.post("/admin/bookings/{booking_id}/status")
@@ -637,15 +724,19 @@ async def admin_reschedule(booking_id: str, body: RescheduleBody, _admin: dict =
         raise HTTPException(status_code=404, detail="Booking not found.")
     if not is_time_in_window(body.preferred_time):
         raise HTTPException(status_code=400, detail=f"Time must be between {BOOKING_TIME_MIN} and {BOOKING_TIME_MAX}.")
-    # Check no conflict (excluding this booking)
-    existing = await db.bookings.find_one({
-        "preferred_date": body.preferred_date,
-        "preferred_time": body.preferred_time,
-        "status": {"$nin": ["cancelled", "completed"]},
-        "id": {"$ne": booking_id},
-    })
-    if existing:
-        raise HTTPException(status_code=409, detail="That time slot is already booked.")
+    duration_min = booking.get("duration_minutes") or get_service_duration(
+        booking.get("service_value"), booking.get("tier_key")
+    )
+    try:
+        start_min = hhmm_to_minutes(body.preferred_time)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid time.")
+    _wmin_start, wmin_end = window_minutes()
+    if start_min + duration_min > wmin_end + 30:
+        raise HTTPException(status_code=400, detail=f"Service ({duration_min} min) runs past close ({BOOKING_TIME_MAX}).")
+    blocked = await get_blocked_minutes_for_date(body.preferred_date, exclude_booking_id=booking_id)
+    if slot_conflicts(start_min, duration_min, blocked):
+        raise HTTPException(status_code=409, detail="That time slot overlaps another booking.")
     await db.bookings.update_one(
         {"id": booking_id},
         {"$set": {

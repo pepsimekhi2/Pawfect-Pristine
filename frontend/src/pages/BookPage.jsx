@@ -132,17 +132,21 @@ export default function BookPage() {
     return () => clearTimeout(t);
   }, [address]);
 
-  // Fetch which time slots are already taken whenever date changes
+  // Fetch which time slots are already taken or too late, given the chosen service/tier duration
   useEffect(() => {
     if (!date) { setTakenTimes([]); return; }
-    api.get(`/api/availability?date=${encodeURIComponent(date)}`)
+    const qs = new URLSearchParams({ date });
+    if (serviceValue) qs.set("service", serviceValue);
+    if (tierKey) qs.set("tier", tierKey);
+    api.get(`/api/availability?${qs.toString()}`)
       .then((r) => {
-        const taken = (r.data?.slots || []).filter((s) => s.taken).map((s) => s.time);
-        setTakenTimes(taken);
-        if (taken.includes(time)) setTime(""); // reset if our pick became taken
+        const slots = r.data?.slots || [];
+        const blocked = slots.filter((s) => s.taken || s.too_late).map((s) => s.time);
+        setTakenTimes(blocked);
+        if (blocked.includes(time)) setTime(""); // reset if our pick became blocked
       })
       .catch(() => setTakenTimes([]));
-  }, [date]); // eslint-disable-line
+  }, [date, serviceValue, tierKey]); // eslint-disable-line
 
   const next = () => setStep((s) => Math.min(TOTAL_STEPS, s + 1));
   const back = () => setStep((s) => Math.max(1, s - 1));
@@ -268,7 +272,7 @@ export default function BookPage() {
                 )}
                 <FieldLabel>Pick a time</FieldLabel>
                 <div className="text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)] -mt-3 mb-2 font-semibold">
-                  Booking window 9:00 AM – 6:30 PM · greyed = already booked
+                  Window 9:00 AM – 6:30 PM · {currentTier?.duration ? `~${currentTier.duration} min service` : "duration set by service"} · greyed = unavailable
                 </div>
                 <TimePicker value={time} onChange={setTime} disabledTimes={takenTimes} testid="book-time" />
               </motion.div>

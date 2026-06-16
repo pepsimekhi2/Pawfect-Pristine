@@ -1,0 +1,45 @@
+{
+  "summary": "Iteration 2 backend + admin-gate frontend tests. 11/11 pytest passing after fixing a CRITICAL naive-vs-aware datetime bug in check_brute_force that was making brute-force lockout (login AND admin-passphrase) return 500 instead of 429. All requested features verified: passphrase gate, brute-force 429, service durations on /api/catalog, too_late slots for deep_cleaning/large, overlap-based slot blocking (general_cleaning standard 120min @ 10:00 blocks dog_walking 30 at 10:00/10:30/11:00/11:30 and 12:00 is free), 409 on overlapping POST /api/bookings, 400 for service running past close, admin reschedule 409 overlap, notify-otw sms_link URL-encoded properly. Admin dashboard loads through /admin gate with 'duck'.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/auth/admin-passphrase + /api/auth/login", "issue": "Brute-force tracking is per-pod (uses request.client.host which is the upstream Kube ingress IP — different per pod). With multiple backend pods, attackers get effectively N*5 attempts before lockout. Consider keying on X-Forwarded-For (true client IP) and/or making lockout state purely Mongo-keyed (already in Mongo, just need consistent identifier)."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_2.py",
+    "/app/test_reports/pytest/iteration_2.xml"
+  ],
+  "action_items": [
+    "(Optional) Improve brute-force identifier to use X-Forwarded-For so per-pod tracking is consolidated; today an attacker can roughly multiply attempts by the number of backend replicas before lockout.",
+    "(Optional) Mongo stores datetimes naive (no tzinfo); fix applied at read site in check_brute_force. Consider standardizing on storing tz-aware via codec_options or always normalizing on read across the codebase."
+  ],
+  "critical_code_review_comments": [
+    "FIXED: check_brute_force compared a tz-naive datetime read from Mongo against datetime.now(timezone.utc), raising TypeError -> 500. Patched to normalize on read.",
+    "server.py grew to ~830 lines with mixed concerns (auth, bookings, availability, admin, helpers). Consider splitting into routers (auth.py, bookings.py, admin.py) and a services/ module for helpers (geocode/route/brute-force/sms). >700 line threshold breached.",
+    "server.py send_owner_sms uses sync Twilio client in async POST /api/bookings — can briefly block the event loop. Run in threadpool or use httpx-based Twilio call for high traffic.",
+    "Availability /api/availability does not authenticate — fine for public booking page but means anyone can enumerate booked slots. Acceptable for current product.",
+    "get_blocked_minutes_for_date filters status not in ['cancelled','completed'] — make sure 'completed' bookings don't free up the slot on the SAME day mid-day (low risk).",
+    "Admin endpoints (/api/admin/*) correctly Depends(require_admin). 200/403 split verified by passphrase auth flow.",
+    "AdminPassphrasePayload accepts strip+lowercase compare — good UX. The shared passphrase is a security tradeoff explicitly chosen by the user; documented in PRD."
+  ],
+  "updated_files": [
+    "/app/backend/server.py (check_brute_force tz-naive fix)",
+    "/app/backend/tests/test_iteration_2.py (new)"
+  ],
+  "success_rate": {
+    "backend": "100% (11/11 pytest)",
+    "frontend": "100% on admin gate flow tested (passphrase input -> wrong shows error -> duck unlocks AdminPage with stats + tabs + upcoming list)"
+  },
+  "test_credentials": "Admin: admin@pawfectpristine.com / Pawfect2026! ; passphrase: duck",
+  "seed_data_creation": "Tests create TEST_-prefixed bookings and cancel/cleanup at the end. After the run, ran a delete_many({name: /^TEST_/}) and cleared login_attempts to keep dataset clean.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All iteration-2 features pass. Backend test suite at /app/backend/tests/test_iteration_2.py (11 tests, ~5s). Note: the brute-force test hammers 40 wrong attempts and may need login_attempts cleanup between full runs if you want test_passphrase_correct to pass deterministically — sequential pytest run handles this because correct passphrase is hit BEFORE the brute force test. The previous iteration_1.json frontend bug (Pet category step 2 empty) was not in scope of this iteration; if not fixed by main agent yet, still applies.",
+  "rca of the issue": "Bug found and fixed: /api/auth/admin-passphrase (and /api/auth/login) returned 500 once the brute-force counter hit 5. Mongo persisted locked_until as a naive datetime; on the next request, `locked_until > datetime.now(timezone.utc)` raised TypeError: can't compare offset-naive and offset-aware datetimes. Fix in /app/backend/server.py check_brute_force: if locked_until.tzinfo is None, replace with timezone.utc before comparing. Verified via test_passphrase_brute_force_429 which now returns 429 as expected and via direct curl after the fix (15 wrong attempts -> 429s instead of 500s)."
+}

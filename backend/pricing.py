@@ -2,8 +2,9 @@
 from typing import Optional
 from datetime import datetime, timezone
 
-# All prices in USD. "tiers" is dict of {tier_key: {"label": str, "price": int, "desc": str}}.
-# v1.2 — prices significantly reduced per owner's directive (2026-06-16).
+# All prices in USD. "tiers" is dict of {tier_key: {"label": str, "price": int, "desc": str, "duration": minutes}}.
+# `duration` = minutes the service occupies on the calendar; used for auto-blocking overlapping slots.
+# v1.3 — added service durations for calendar blocking (2026-02-14).
 SERVICE_CATALOG = {
     "general_cleaning": {
         "label": "General Cleaning",
@@ -12,10 +13,10 @@ SERVICE_CATALOG = {
         "has_tiers": True,
         "tier_question": "How messy is the space?",
         "tiers": {
-            "light": {"label": "Lightly lived-in", "price": 15, "desc": "Quick refresh; surfaces tidy already."},
-            "standard": {"label": "Standard", "price": 55, "desc": "Normal weekly mess."},
-            "heavy": {"label": "Heavy", "price": 115, "desc": "A few weeks of build-up."},
-            "disaster": {"label": "Disaster zone", "price": 250, "desc": "Bring backup — we love a challenge."},
+            "light":    {"label": "Lightly lived-in", "price": 15,  "duration": 60,  "desc": "Quick refresh; surfaces tidy already."},
+            "standard": {"label": "Standard",         "price": 55,  "duration": 120, "desc": "Normal weekly mess."},
+            "heavy":    {"label": "Heavy",            "price": 115, "duration": 180, "desc": "A few weeks of build-up."},
+            "disaster": {"label": "Disaster zone",    "price": 250, "duration": 240, "desc": "Bring backup — we love a challenge."},
         },
     },
     "deep_cleaning": {
@@ -25,10 +26,10 @@ SERVICE_CATALOG = {
         "has_tiers": True,
         "tier_question": "How big is the space?",
         "tiers": {
-            "studio": {"label": "Studio / 1 BR", "price": 80, "desc": "Top-to-bottom reset."},
-            "small": {"label": "2 BR home", "price": 130, "desc": "Full deep clean inside & out."},
-            "medium": {"label": "3 BR home", "price": 190, "desc": "Behind appliances, cabinets, grout."},
-            "large": {"label": "4+ BR home", "price": 260, "desc": "The whole house, every inch."},
+            "studio": {"label": "Studio / 1 BR", "price": 80,  "duration": 120, "desc": "Top-to-bottom reset."},
+            "small":  {"label": "2 BR home",     "price": 130, "duration": 180, "desc": "Full deep clean inside & out."},
+            "medium": {"label": "3 BR home",     "price": 190, "duration": 240, "desc": "Behind appliances, cabinets, grout."},
+            "large":  {"label": "4+ BR home",    "price": 260, "duration": 360, "desc": "The whole house, every inch."},
         },
     },
     "organizing": {
@@ -38,9 +39,9 @@ SERVICE_CATALOG = {
         "has_tiers": True,
         "tier_question": "How much chaos are we taming?",
         "tiers": {
-            "drawer": {"label": "A drawer or closet", "price": 25, "desc": "Focused 2-hour reset."},
-            "room": {"label": "A whole room", "price": 65, "desc": "Sort, donate, label."},
-            "house": {"label": "Multiple rooms", "price": 140, "desc": "Half-day with full systems."},
+            "drawer": {"label": "A drawer or closet", "price": 25,  "duration": 60,  "desc": "Focused 2-hour reset."},
+            "room":   {"label": "A whole room",       "price": 65,  "duration": 120, "desc": "Sort, donate, label."},
+            "house":  {"label": "Multiple rooms",     "price": 140, "duration": 240, "desc": "Half-day with full systems."},
         },
     },
     "garage_shed": {
@@ -50,9 +51,9 @@ SERVICE_CATALOG = {
         "has_tiers": True,
         "tier_question": "What are we dealing with?",
         "tiers": {
-            "tidy": {"label": "Mildly cluttered", "price": 60, "desc": "Sort, sweep, organize."},
-            "busy": {"label": "Years of stuff", "price": 130, "desc": "Heavy lift, dump runs included up to 1."},
-            "full": {"label": "Can't see the floor", "price": 240, "desc": "Bring the team. We'll fix it."},
+            "tidy": {"label": "Mildly cluttered",   "price": 60,  "duration": 120, "desc": "Sort, sweep, organize."},
+            "busy": {"label": "Years of stuff",     "price": 130, "duration": 240, "desc": "Heavy lift, dump runs included up to 1."},
+            "full": {"label": "Can't see the floor", "price": 240, "duration": 360, "desc": "Bring the team. We'll fix it."},
         },
     },
     "dog_walking": {
@@ -62,9 +63,9 @@ SERVICE_CATALOG = {
         "has_tiers": True,
         "tier_question": "Walk length?",
         "tiers": {
-            "30": {"label": "30 min", "price": 12, "desc": "Quick neighborhood loop."},
-            "60": {"label": "60 min", "price": 20, "desc": "Real exercise; energy burned."},
-            "90": {"label": "90 min", "price": 30, "desc": "Long adventure walk."},
+            "30": {"label": "30 min", "price": 12, "duration": 30, "desc": "Quick neighborhood loop."},
+            "60": {"label": "60 min", "price": 20, "duration": 60, "desc": "Real exercise; energy burned."},
+            "90": {"label": "90 min", "price": 30, "duration": 90, "desc": "Long adventure walk."},
         },
     },
     "pet_sitting": {
@@ -74,9 +75,9 @@ SERVICE_CATALOG = {
         "has_tiers": True,
         "tier_question": "What kind of stay?",
         "tiers": {
-            "dropin": {"label": "Drop-in (30 min)", "price": 12, "desc": "Feed, water, snuggle."},
-            "halfday": {"label": "Half day", "price": 30, "desc": "Up to 4 hours of company."},
-            "overnight": {"label": "Overnight (12 hr)", "price": 55, "desc": "We stay over so they don't feel alone."},
+            "dropin":    {"label": "Drop-in (30 min)", "price": 12, "duration": 30,  "desc": "Feed, water, snuggle."},
+            "halfday":   {"label": "Half day",         "price": 30, "duration": 240, "desc": "Up to 4 hours of company."},
+            "overnight": {"label": "Overnight (12 hr)","price": 55, "duration": 720, "desc": "We stay over so they don't feel alone."},
         },
     },
     "feeding_care": {
@@ -86,9 +87,9 @@ SERVICE_CATALOG = {
         "has_tiers": True,
         "tier_question": "How many visits?",
         "tiers": {
-            "1": {"label": "1 visit", "price": 10, "desc": "Single drop-in for meals/meds."},
-            "2": {"label": "2 visits / day", "price": 18, "desc": "Morning + evening."},
-            "3": {"label": "3 visits / day", "price": 28, "desc": "Full day coverage."},
+            "1": {"label": "1 visit",       "price": 10, "duration": 30, "desc": "Single drop-in for meals/meds."},
+            "2": {"label": "2 visits / day","price": 18, "duration": 30, "desc": "Morning + evening."},
+            "3": {"label": "3 visits / day","price": 28, "duration": 30, "desc": "Full day coverage."},
         },
     },
     "playtime": {
@@ -98,9 +99,9 @@ SERVICE_CATALOG = {
         "has_tiers": True,
         "tier_question": "How much enrichment?",
         "tiers": {
-            "30": {"label": "30 min play", "price": 12, "desc": "Fetch, tug, sniff."},
-            "60": {"label": "60 min play", "price": 20, "desc": "Mental + physical workout."},
-            "puzzle": {"label": "60 min + puzzle work", "price": 30, "desc": "Enrichment toys + bonding."},
+            "30":     {"label": "30 min play",          "price": 12, "duration": 30, "desc": "Fetch, tug, sniff."},
+            "60":     {"label": "60 min play",          "price": 20, "duration": 60, "desc": "Mental + physical workout."},
+            "puzzle": {"label": "60 min + puzzle work", "price": 30, "duration": 60, "desc": "Enrichment toys + bonding."},
         },
     },
 }
@@ -208,3 +209,32 @@ def is_time_in_window(hhmm: str) -> bool:
         return (sh * 60 + sm) <= (h * 60 + m) <= (eh * 60 + em)
     except Exception:
         return False
+
+
+DEFAULT_DURATION_MIN = 60  # fallback when a service or tier lacks a configured duration
+
+
+def get_service_duration(service_value: str, tier_key: Optional[str] = None) -> int:
+    """Return the duration (in minutes) a service occupies on the calendar."""
+    svc = SERVICE_CATALOG.get(service_value)
+    if not svc:
+        return DEFAULT_DURATION_MIN
+    if svc.get("has_tiers"):
+        tier = svc["tiers"].get(tier_key) if tier_key else None
+        if not tier:
+            # fall back to first tier
+            try:
+                tier = next(iter(svc["tiers"].values()))
+            except StopIteration:
+                return DEFAULT_DURATION_MIN
+        return int(tier.get("duration", DEFAULT_DURATION_MIN))
+    return int(svc.get("duration", DEFAULT_DURATION_MIN))
+
+
+def hhmm_to_minutes(hhmm: str) -> int:
+    h, m = map(int, hhmm.split(":"))
+    return h * 60 + m
+
+
+def window_minutes() -> tuple:
+    return hhmm_to_minutes(BOOKING_TIME_MIN), hhmm_to_minutes(BOOKING_TIME_MAX)

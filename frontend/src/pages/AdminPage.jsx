@@ -94,9 +94,16 @@ export default function AdminPage() {
       if (data.sms_sent) {
         showToast(`SMS sent to ${b.phone} ✅`);
       } else {
-        // Open the user's SMS app with prefilled text
-        window.open(data.sms_link, "_blank");
-        showToast(`SMS app opened (Twilio not configured)`);
+        // Free SMS workaround: open the device's native Messages app with prefilled body.
+        // On mobile (iOS/Android) this opens the SMS composer instantly.
+        const a = document.createElement("a");
+        a.href = data.sms_link;
+        a.target = "_self";
+        a.rel = "noopener noreferrer";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        showToast(`Opening Messages — just hit send ✉️`);
       }
       await load();
     } catch (e) {
@@ -349,10 +356,19 @@ function RescheduleModal({ booking, onClose, onSave, busy }) {
   const [taken, setTaken] = useState([]);
   useEffect(() => {
     if (!date) return;
-    api.get(`/api/availability?date=${encodeURIComponent(date)}`)
-      .then((r) => setTaken((r.data?.slots || []).filter((s) => s.taken && s.time !== booking.preferred_time).map((s) => s.time)))
+    const qs = new URLSearchParams({ date });
+    if (booking.service_value) qs.set("service", booking.service_value);
+    if (booking.tier_key) qs.set("tier", booking.tier_key);
+    api.get(`/api/availability?${qs.toString()}`)
+      .then((r) => {
+        const slots = r.data?.slots || [];
+        // Keep the booking's own current slot pickable
+        setTaken(slots
+          .filter((s) => (s.taken || s.too_late) && s.time !== booking.preferred_time)
+          .map((s) => s.time));
+      })
       .catch(() => setTaken([]));
-  }, [date, booking.preferred_time]);
+  }, [date, booking.preferred_time, booking.service_value, booking.tier_key]);
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="modal-backdrop" onClick={onClose}>
       <motion.div initial={{ y: 24, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 24, opacity: 0 }} className="modal-card" onClick={(e) => e.stopPropagation()} data-testid="reschedule-modal">

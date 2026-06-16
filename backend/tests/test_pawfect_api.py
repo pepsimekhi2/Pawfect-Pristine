@@ -121,4 +121,4 @@ class TestBookings:
             assert "_id" not in b
         # Find our booking
         ids = [b.get("id") for b in bookings]
-        assert TestBookings.created_id in ids, f"Created id not found in recent list"
+        assert TestBookings.created_id in ids, "Created id not found in recent list"
