@@ -100,3 +100,48 @@ User uploaded a static HTML landing page (`pawfect-and-pristine.html`) for a loc
 - Stripe / real "Pay NOW" tap-to-pay is **MOCKED** awaiting publishable + secret keys.
 - Firebase Admin SDK service-account integration is open — when added, rules can be
   tightened to per-user auth.uid validation (template provided).
+
+
+---
+
+## v1.3 — Admin passphrase, service durations, free SMS (2026-02-14)
+
+### Added
+- **Admin "magic word" gate** (`/admin`) — typing the passphrase **`duck`**
+  (env `ADMIN_PASSPHRASE`) on the gate page swaps the session into the seeded
+  admin JWT via `POST /api/auth/admin-passphrase`. Brute-force protected with
+  the same 5-attempt / 15-min lockout that login uses.
+- **Service-based time blocking** — each tier in `pricing.py` now has a
+  `duration` (minutes). The booking calendar auto-greys all 30-min slots that
+  would overlap an existing booking, AND all slots whose duration would push
+  past the 18:30 close (with a 30-min grace). The catalog API surfaces
+  `duration` so the frontend shows "~X min service" on step 2.
+- **Free SMS workaround for "I'm on the way"** — admin button hits
+  `POST /api/admin/bookings/{id}/notify-otw`. If Twilio is unconfigured, the
+  endpoint returns a fully URL-encoded `sms:` deeplink that the AdminPage
+  triggers via a hidden anchor click — this opens the device's native Messages
+  app on mobile/desktop with the recipient + body pre-filled. **Zero cost.**
+
+### Technical
+- `get_service_duration(service, tier)` helper in `pricing.py` + `hhmm_to_minutes`
+  / `window_minutes` utilities.
+- `get_blocked_minutes_for_date(date, exclude_booking_id?)` + `slot_conflicts()`
+  centralize overlap math used by `/api/availability`, booking create, and admin
+  reschedule.
+- Booking documents now store `duration_minutes` for stable reschedule math.
+- `/api/availability` accepts optional `?service=&tier=` and returns
+  `{ time, taken, too_late }` per slot.
+- Fixed a latent tz-naive/tz-aware datetime comparison bug in
+  `check_brute_force` that surfaced once admin-passphrase locked out — now
+  normalizes Mongo's naive datetimes to UTC on read.
+
+### Open / Backlog
+- **P1** — Twilio Account SID/Auth Token/From number (user opted out for now;
+  free sms: deeplink fallback in place).
+- **P1** — Firebase database rules in `FIREBASE_RULES.md` need to be pasted
+  into the Firebase console.
+- **P1** — Stripe Payment Element for real "Pay NOW" (still MOCKED).
+- **P2** — Brute-force identifier should use `X-Forwarded-For` so lockout state
+  is consolidated across pod replicas (today: per-pod ingress IP).
+- **P2** — Split `server.py` (~830 lines) into routers (`auth.py`, `bookings.py`,
+  `admin.py`) and a `services/` module for helpers.
