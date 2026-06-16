@@ -6,6 +6,7 @@ import { useAuth } from "../contexts/AuthContext";
 import api from "../lib/api";
 import { PrimaryButton, OutlineButton } from "../components/ui-kit";
 import MonthCalendar from "../components/MonthCalendar";
+import HelpBanner from "../components/HelpBanner";
 
 function StatusPill({ status }) {
   const s = status || "scheduled";
@@ -64,6 +65,7 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-[var(--bg-soft)]">
+      <HelpBanner />
       <header className="bg-white border-b border-[var(--border)]">
         <div className="max-w-6xl mx-auto px-6 md:px-10 h-16 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2.5" data-testid="dashboard-logo">

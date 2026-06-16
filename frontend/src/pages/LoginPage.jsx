@@ -20,8 +20,8 @@ export default function LoginPage() {
     setError("");
     setBusy(true);
     try {
-      await login(email.trim(), password);
-      const next = loc.state?.from || "/dashboard";
+      const u = await login(email.trim(), password);
+      const next = u?.role === "admin" ? "/admin" : (loc.state?.from || "/dashboard");
       nav(next, { replace: true });
     } catch (err) {
       setError(err?.response?.data?.detail || "Couldn't sign you in. Try again.");

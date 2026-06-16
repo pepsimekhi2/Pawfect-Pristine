@@ -6,6 +6,7 @@ import { useAuth } from "../contexts/AuthContext";
 import api from "../lib/api";
 import { SegmentedControl, PillToggle, Stepper, PrimaryButton, OutlineButton } from "../components/ui-kit";
 import { CalendarPicker, TimePicker, FormattedDate, toIso } from "../components/CalendarPicker";
+import HelpBanner from "../components/HelpBanner";
 
 const confettiColors = ["#3d7a5c", "#7a9e8a", "#a8cfc0", "#d4a435", "#eef7f2"];
 function fireConfetti() {
@@ -41,12 +42,15 @@ export default function BookPage() {
   const [notes, setNotes] = useState("");
   const [paymentPlan, setPaymentPlan] = useState("pay_later");
   const [paymentMethod, setPaymentMethod] = useState("cash");
+  const [accessMethod, setAccessMethod] = useState("home");
+  const [accessNotes, setAccessNotes] = useState("");
   const [tosAccepted, setTosAccepted] = useState(false);
   const [quote, setQuote] = useState(null);
   const [eta, setEta] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(null);
   const [error, setError] = useState("");
+  const [takenTimes, setTakenTimes] = useState([]);
   // mock card
   const [cardNum, setCardNum] = useState("4242 4242 4242 4242");
   const [cardExp, setCardExp] = useState("12/29");
@@ -128,12 +132,25 @@ export default function BookPage() {
     return () => clearTimeout(t);
   }, [address]);
 
+  // Fetch which time slots are already taken whenever date changes
+  useEffect(() => {
+    if (!date) { setTakenTimes([]); return; }
+    api.get(`/api/availability?date=${encodeURIComponent(date)}`)
+      .then((r) => {
+        const taken = (r.data?.slots || []).filter((s) => s.taken).map((s) => s.time);
+        setTakenTimes(taken);
+        if (taken.includes(time)) setTime(""); // reset if our pick became taken
+      })
+      .catch(() => setTakenTimes([]));
+  }, [date]); // eslint-disable-line
+
   const next = () => setStep((s) => Math.min(TOTAL_STEPS, s + 1));
   const back = () => setStep((s) => Math.max(1, s - 1));
 
   const s1Valid = serviceValue && (!currentSvc?.has_tiers || tierKey);
   const s2Valid = !!date && !!time;
-  const s3Valid = name.trim() && phone.trim() && address.trim();
+  const s3Valid = name.trim() && phone.trim() && address.trim() && accessMethod
+    && (accessMethod !== "other" || accessNotes.trim().length > 2);
   const s4Valid = (paymentPlan === "pay_later" || paymentMethod === "cash")
     ? true
     : (cardNum.replace(/\s/g,"").length >= 12 && cardExp.length >= 4 && cardCvc.length >= 3);
@@ -149,6 +166,8 @@ export default function BookPage() {
         tier_key: tierKey,
         pets,
         notes,
+        access_method: accessMethod,
+        access_notes: accessNotes,
         preferred_date: date,
         preferred_time: time,
         payment_plan: paymentPlan,
@@ -165,6 +184,7 @@ export default function BookPage() {
 
   return (
     <div className="min-h-screen bg-[var(--bg-soft)]">
+      <HelpBanner />
       <header className="bg-white border-b border-[var(--border)]">
         <div className="max-w-5xl mx-auto px-6 md:px-10 h-16 flex items-center justify-between">
           <Link to={user ? "/dashboard" : "/"} className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-[var(--green)] uppercase tracking-[0.16em] hover:opacity-70" data-testid="book-back">
@@ -247,7 +267,10 @@ export default function BookPage() {
                   </div>
                 )}
                 <FieldLabel>Pick a time</FieldLabel>
-                <TimePicker value={time} onChange={setTime} testid="book-time" />
+                <div className="text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)] -mt-3 mb-2 font-semibold">
+                  Booking window 9:00 AM – 6:30 PM · greyed = already booked
+                </div>
+                <TimePicker value={time} onChange={setTime} disabledTimes={takenTimes} testid="book-time" />
               </motion.div>
             )}
 
@@ -282,6 +305,41 @@ export default function BookPage() {
                   <SmallLabel>Anything we should know?</SmallLabel>
                   <textarea data-testid="notes-input" className="pp-input mt-1.5" placeholder="Skittish cat, allergies, gate code, etc." value={notes} onChange={(e) => setNotes(e.target.value)} />
                 </div>
+
+                <div className="h-px bg-[var(--border)] my-2" />
+                <FieldLabel>How will we get in?</FieldLabel>
+                <div className="grid sm:grid-cols-2 gap-3" data-testid="access-options">
+                  {[
+                    { v: "home", label: "I'll be home", desc: "I'll let you in when you arrive.", icon: "🏠" },
+                    { v: "lockbox", label: "Lockbox / code", desc: "Combo or smart-lock code (share in notes).", icon: "🔒" },
+                    { v: "hidden_key", label: "Hidden key", desc: "Tell us where to find it (in notes).", icon: "🗝️" },
+                    { v: "garage_code", label: "Garage code", desc: "Garage keypad — share in notes.", icon: "🚪" },
+                    { v: "doorman", label: "Doorman / front desk", desc: "Building lets you up.", icon: "🛎️" },
+                    { v: "other", label: "Other (see notes)", desc: "Tell us how in the box below.", icon: "✍️" },
+                  ].map((opt) => (
+                    <button
+                      type="button"
+                      key={opt.v}
+                      onClick={() => setAccessMethod(opt.v)}
+                      data-testid={`access-${opt.v}`}
+                      className={`method-card ${accessMethod === opt.v ? "is-selected" : ""}`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="method-icon">{opt.icon}</span>
+                        <div className="text-left">
+                          <div className="font-semibold text-[14px] text-[var(--text)]">{opt.label}</div>
+                          <div className="text-[12px] text-[var(--text-muted)] mt-0.5">{opt.desc}</div>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+                {accessMethod !== "home" && (
+                  <div>
+                    <SmallLabel>Access details {accessMethod === "other" ? "(required)" : "(code / location / instructions)"}</SmallLabel>
+                    <input data-testid="access-notes" className="pp-input mt-1.5" placeholder={accessMethod === "lockbox" ? "Lockbox combo: 1234 — to the right of the door" : accessMethod === "hidden_key" ? "Under the gnome on the porch" : accessMethod === "garage_code" ? "Keypad code: 5678" : "How to get in"} value={accessNotes} onChange={(e) => setAccessNotes(e.target.value)} />
+                  </div>
+                )}
               </motion.div>
             )}
 
@@ -379,6 +437,10 @@ export default function BookPage() {
                   <Row k="When" v={<><FormattedDate iso={date} /> {time && <span className="text-[var(--text-muted)]">at {time}</span>}</>} />
                   <Row k="Where" v={address} />
                   <Row k="Contact" v={`${name} · ${phone}`} />
+                  <Row k="Access" v={(() => {
+                    const labels = { home: "I'll be home", lockbox: "Lockbox / code", hidden_key: "Hidden key", garage_code: "Garage code", doorman: "Doorman / front desk", other: "Other" };
+                    return <>{labels[accessMethod] || accessMethod}{accessNotes ? <span className="text-[var(--text-muted)]"> — {accessNotes}</span> : null}</>;
+                  })()} />
                   <div className="h-px bg-[var(--border)] my-3" />
                   <Row k="Service price" v={`$${quote?.base_price ?? 0}`} />
                   {quote?.is_advance && <Row k="Advance fee (≥7 days out)" v={`$${quote.advance_fee}`} />}

@@ -10,6 +10,8 @@ import SignupPage from "./pages/SignupPage";
 import DashboardPage from "./pages/DashboardPage";
 import BookPage from "./pages/BookPage";
 import TosPage from "./pages/TosPage";
+import AdminPage from "./pages/AdminPage";
+import RequireAdmin from "./components/RequireAdmin";
 import RequireAuth from "./components/RequireAuth";
 import "./App.css";
 
@@ -420,6 +422,7 @@ export default function App() {
       <Route path="/book" element={<BookPage />} />
       <Route path="/tos" element={<TosPage />} />
       <Route path="/dashboard" element={<RequireAuth><DashboardPage /></RequireAuth>} />
+      <Route path="/admin" element={<RequireAdmin><AdminPage /></RequireAdmin>} />
       <Route path="*" element={<HomePage />} />
     </Routes>
   );

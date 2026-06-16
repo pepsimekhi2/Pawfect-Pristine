@@ -19,7 +19,7 @@ from twilio.rest import Client as TwilioClient
 from auth_utils import (
     hash_password, verify_password, create_access_token, decode_token, extract_token
 )
-from pricing import compute_quote, get_public_catalog, SERVICE_CATALOG
+from pricing import compute_quote, get_public_catalog, SERVICE_CATALOG, generate_time_slots, is_time_in_window, BOOKING_TIME_MIN, BOOKING_TIME_MAX
 from tos import TOS_TEXT, TOS_VERSION, TOS_EFFECTIVE
 import firebase_sync as fb
 import asyncio
@@ -90,6 +90,17 @@ class BookingCreate(BaseModel):
     payment_plan: Literal["pay_later", "half_now", "all_now"] = "pay_later"
     payment_method: Literal["card", "cash", "later"] = "later"
     tos_accepted: bool = True
+    access_method: Literal["home", "lockbox", "hidden_key", "garage_code", "doorman", "other"] = "home"
+    access_notes: str = ""
+
+
+class RescheduleBody(BaseModel):
+    preferred_date: str
+    preferred_time: str
+
+
+class StatusBody(BaseModel):
+    status: Literal["scheduled", "on_the_way", "in_progress", "completed", "cancelled"]
 
 
 # ============= Helpers =============
@@ -143,8 +154,8 @@ def classify_zone(miles: float) -> dict:
         return {"zone": "standard", "extra_fee": 0, "zone_label": "Standard Service Area",
                 "zone_message": "You're right in our happy zone — no extra fees!"}
     if miles <= 13:
-        return {"zone": "extended", "extra_fee": 20, "zone_label": "Extended Service Area",
-                "zone_message": "We can swing by — a small $20 travel fee applies."}
+        return {"zone": "extended", "extra_fee": 10, "zone_label": "Extended Service Area",
+                "zone_message": "We can swing by — a small $10 travel fee applies."}
     return {"zone": "out_of_range", "extra_fee": 0, "zone_label": "Out of Range",
             "zone_message": "You're a bit far for our regular routes. Call us at (470) 381-4682 for a custom quote!"}
 
@@ -316,6 +327,26 @@ async def create_booking(payload: BookingCreate, request: Request):
     if payload.service_value not in SERVICE_CATALOG:
         raise HTTPException(status_code=400, detail="Unknown service.")
 
+    # Validate time window (9:00 AM – 6:30 PM)
+    if payload.preferred_time and not is_time_in_window(payload.preferred_time):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Bookings are only available between {BOOKING_TIME_MIN} and {BOOKING_TIME_MAX}."
+        )
+
+    # Prevent double-booking the same date+time
+    if payload.preferred_date and payload.preferred_time:
+        existing = await db.bookings.find_one({
+            "preferred_date": payload.preferred_date,
+            "preferred_time": payload.preferred_time,
+            "status": {"$nin": ["cancelled", "completed"]},
+        })
+        if existing:
+            raise HTTPException(
+                status_code=409,
+                detail="That time slot is already booked. Please pick another time."
+            )
+
     quote_data = compute_quote(payload.service_value, payload.tier_key, payload.preferred_date)
 
     # Compute ETA if possible
@@ -357,6 +388,8 @@ async def create_booking(payload: BookingCreate, request: Request):
         "tier_label": quote_data["tier_label"],
         "pets": payload.pets,
         "notes": payload.notes,
+        "access_method": payload.access_method,
+        "access_notes": payload.access_notes,
         "preferred_date": payload.preferred_date,
         "preferred_time": payload.preferred_time,
         "quote": quote_data,
@@ -476,6 +509,184 @@ async def firebase_status():
 @api_router.get("/bookings/recent")
 async def recent_bookings(limit: int = 20):
     docs = await db.bookings.find({}, {"_id": 0, "tos_accepted": 0}).sort("created_at", -1).to_list(limit)
+    return docs
+
+
+# ============= Availability =============
+@api_router.get("/availability")
+async def availability(date: str):
+    """Return list of all time slots and which ones are taken for a given date."""
+    if not date:
+        raise HTTPException(status_code=400, detail="date is required (YYYY-MM-DD)")
+    slots = generate_time_slots()
+    taken_docs = await db.bookings.find(
+        {"preferred_date": date, "status": {"$nin": ["cancelled", "completed"]}},
+        {"_id": 0, "preferred_time": 1},
+    ).to_list(200)
+    taken = {d.get("preferred_time") for d in taken_docs if d.get("preferred_time")}
+    return {
+        "date": date,
+        "min_time": BOOKING_TIME_MIN,
+        "max_time": BOOKING_TIME_MAX,
+        "slots": [{"time": s, "taken": s in taken} for s in slots],
+    }
+
+
+# ============= Admin =============
+async def require_admin(user: dict = Depends(get_current_user)) -> dict:
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required.")
+    return user
+
+
+def _safe_booking(d: dict) -> dict:
+    d = {k: v for k, v in d.items() if k != "_id" and k != "tos_accepted"}
+    return d
+
+
+@api_router.get("/admin/bookings/today")
+async def admin_today(_admin: dict = Depends(require_admin)):
+    today = datetime.now(timezone.utc).date().isoformat()
+    docs = await db.bookings.find(
+        {"preferred_date": today, "status": {"$ne": "cancelled"}},
+        {"_id": 0, "tos_accepted": 0},
+    ).sort("preferred_time", 1).to_list(500)
+    return docs
+
+
+@api_router.get("/admin/bookings/upcoming")
+async def admin_upcoming(_admin: dict = Depends(require_admin)):
+    today = datetime.now(timezone.utc).date().isoformat()
+    docs = await db.bookings.find(
+        {"preferred_date": {"$gte": today}, "status": {"$nin": ["cancelled", "completed"]}},
+        {"_id": 0, "tos_accepted": 0},
+    ).sort([("preferred_date", 1), ("preferred_time", 1)]).to_list(500)
+    return docs
+
+
+@api_router.get("/admin/bookings/all")
+async def admin_all(limit: int = 200, _admin: dict = Depends(require_admin)):
+    docs = await db.bookings.find({}, {"_id": 0, "tos_accepted": 0}).sort("created_at", -1).to_list(limit)
+    return docs
+
+
+@api_router.get("/admin/stats")
+async def admin_stats(_admin: dict = Depends(require_admin)):
+    today = datetime.now(timezone.utc).date().isoformat()
+    today_docs = await db.bookings.find(
+        {"preferred_date": today, "status": {"$ne": "cancelled"}}, {"_id": 0, "grand_total": 1}
+    ).to_list(500)
+    today_revenue = round(sum((d.get("grand_total", 0) or 0) for d in today_docs), 2)
+    upcoming_count = await db.bookings.count_documents(
+        {"preferred_date": {"$gte": today}, "status": {"$nin": ["cancelled", "completed"]}}
+    )
+    customers_count = await db.users.count_documents({"role": {"$ne": "admin"}})
+    return {
+        "today_bookings": len(today_docs),
+        "today_revenue": today_revenue,
+        "upcoming_count": upcoming_count,
+        "customers_count": customers_count,
+    }
+
+
+@api_router.post("/admin/bookings/{booking_id}/notify-otw")
+async def admin_notify_otw(booking_id: str, _admin: dict = Depends(require_admin)):
+    booking = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found.")
+    now = datetime.now(timezone.utc).isoformat()
+    sms_body = (
+        f"Hi {booking.get('name', 'there')}! This is Pawfect & Pristine — "
+        f"I'm on the way to your {booking.get('service_label', 'service')} now. See you soon! 🐾"
+    )
+    sms_sent = False
+    if TWILIO_SID and TWILIO_TOKEN and TWILIO_FROM and booking.get("phone"):
+        try:
+            client = TwilioClient(TWILIO_SID, TWILIO_TOKEN)
+            client.messages.create(body=sms_body, from_=TWILIO_FROM, to=booking["phone"])
+            sms_sent = True
+        except Exception as e:
+            logger.warning(f"Twilio send failed: {e}")
+    await db.bookings.update_one(
+        {"id": booking_id},
+        {"$set": {"status": "on_the_way", "otw_notified_at": now, "otw_sms_sent": sms_sent}},
+    )
+    asyncio.create_task(fb.patch(f"bookings/{booking_id}", {"status": "on_the_way", "otw_notified_at": now}))
+    return {"ok": True, "sms_sent": sms_sent, "sms_body": sms_body if not sms_sent else None,
+            "tel_link": f"tel:{booking.get('phone')}",
+            "sms_link": f"sms:{booking.get('phone')}?body={sms_body.replace(' ', '%20')}"}
+
+
+@api_router.post("/admin/bookings/{booking_id}/status")
+async def admin_set_status(booking_id: str, body: StatusBody, _admin: dict = Depends(require_admin)):
+    booking = await db.bookings.find_one({"id": booking_id})
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found.")
+    await db.bookings.update_one(
+        {"id": booking_id},
+        {"$set": {"status": body.status, "status_updated_at": datetime.now(timezone.utc).isoformat()}},
+    )
+    asyncio.create_task(fb.patch(f"bookings/{booking_id}", {"status": body.status}))
+    return {"ok": True, "status": body.status}
+
+
+@api_router.post("/admin/bookings/{booking_id}/reschedule")
+async def admin_reschedule(booking_id: str, body: RescheduleBody, _admin: dict = Depends(require_admin)):
+    booking = await db.bookings.find_one({"id": booking_id})
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found.")
+    if not is_time_in_window(body.preferred_time):
+        raise HTTPException(status_code=400, detail=f"Time must be between {BOOKING_TIME_MIN} and {BOOKING_TIME_MAX}.")
+    # Check no conflict (excluding this booking)
+    existing = await db.bookings.find_one({
+        "preferred_date": body.preferred_date,
+        "preferred_time": body.preferred_time,
+        "status": {"$nin": ["cancelled", "completed"]},
+        "id": {"$ne": booking_id},
+    })
+    if existing:
+        raise HTTPException(status_code=409, detail="That time slot is already booked.")
+    await db.bookings.update_one(
+        {"id": booking_id},
+        {"$set": {
+            "preferred_date": body.preferred_date,
+            "preferred_time": body.preferred_time,
+            "rescheduled_at": datetime.now(timezone.utc).isoformat(),
+        }},
+    )
+    asyncio.create_task(fb.patch(f"bookings/{booking_id}", {
+        "preferred_date": body.preferred_date,
+        "preferred_time": body.preferred_time,
+    }))
+    return {"ok": True, "preferred_date": body.preferred_date, "preferred_time": body.preferred_time}
+
+
+@api_router.post("/admin/bookings/{booking_id}/cancel")
+async def admin_cancel(booking_id: str, _admin: dict = Depends(require_admin)):
+    booking = await db.bookings.find_one({"id": booking_id})
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found.")
+    await db.bookings.update_one(
+        {"id": booking_id},
+        {"$set": {
+            "status": "cancelled",
+            "cancelled_at": datetime.now(timezone.utc).isoformat(),
+            "cancelled_by": "admin",
+        }},
+    )
+    asyncio.create_task(fb.patch(f"bookings/{booking_id}", {"status": "cancelled"}))
+    return {"ok": True, "status": "cancelled"}
+
+
+@api_router.get("/admin/customers")
+async def admin_customers(_admin: dict = Depends(require_admin)):
+    docs = await db.users.find(
+        {"role": {"$ne": "admin"}},
+        {"_id": 0, "password_hash": 0},
+    ).sort("created_at", -1).to_list(500)
+    # Attach booking count
+    for d in docs:
+        d["booking_count"] = await db.bookings.count_documents({"user_id": d["id"]})
     return docs
 
 

@@ -97,10 +97,10 @@ export function CalendarPicker({ value, onChange, minDate, markedDates = [], tes
 }
 
 const HOURS = [
-  "08:00","08:30","09:00","09:30","10:00","10:30",
-  "11:00","11:30","12:00","12:30","13:00","13:30",
-  "14:00","14:30","15:00","15:30","16:00","16:30",
-  "17:00","17:30","18:00","18:30","19:00",
+  "09:00","09:30","10:00","10:30","11:00","11:30",
+  "12:00","12:30","13:00","13:30","14:00","14:30",
+  "15:00","15:30","16:00","16:30","17:00","17:30",
+  "18:00","18:30",
 ];
 function prettyTime(t) {
   const [h, m] = t.split(":").map(Number);
@@ -108,20 +108,26 @@ function prettyTime(t) {
   const hh = ((h + 11) % 12) + 1;
   return `${hh}:${String(m).padStart(2, "0")} ${suf}`;
 }
-export function TimePicker({ value, onChange, testid = "time-picker" }) {
+export function TimePicker({ value, onChange, disabledTimes = [], testid = "time-picker" }) {
+  const blocked = new Set(disabledTimes);
   return (
     <div className="pp-time-grid" data-testid={testid}>
-      {HOURS.map((t) => (
-        <button
-          type="button"
-          key={t}
-          onClick={() => onChange(t)}
-          data-testid={`${testid}-${t}`}
-          className={`pp-time-cell ${value === t ? "is-selected" : ""}`}
-        >
-          {prettyTime(t)}
-        </button>
-      ))}
+      {HOURS.map((t) => {
+        const isBlocked = blocked.has(t);
+        return (
+          <button
+            type="button"
+            key={t}
+            disabled={isBlocked}
+            onClick={() => !isBlocked && onChange(t)}
+            data-testid={`${testid}-${t}`}
+            title={isBlocked ? "Already booked — pick another time" : ""}
+            className={`pp-time-cell ${value === t ? "is-selected" : ""} ${isBlocked ? "is-taken" : ""}`}
+          >
+            {prettyTime(t)}{isBlocked && <span className="taken-x"> ×</span>}
+          </button>
+        );
+      })}
     </div>
   );
 }

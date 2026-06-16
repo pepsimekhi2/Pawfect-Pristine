@@ -1,13 +1,24 @@
 import React from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { PrimaryButton, OutlineButton } from "./ui-kit";
-import { LayoutDashboard, LogIn } from "lucide-react";
+import { LayoutDashboard, LogIn, Shield } from "lucide-react";
 
 export default function HeaderAuth() {
   const { user, loading } = useAuth();
   if (loading) return <span className="text-[12px] text-[var(--text-muted)]">…</span>;
   if (user) {
+    if (user.role === "admin") {
+      return (
+        <div className="flex items-center gap-2">
+          <Link to="/admin" data-testid="nav-admin">
+            <PrimaryButton testid="header-admin-btn">
+              <Shield size={14} /> Admin
+            </PrimaryButton>
+          </Link>
+        </div>
+      );
+    }
     return (
       <Link to="/dashboard" data-testid="nav-dashboard">
         <PrimaryButton testid="header-dashboard-btn">
