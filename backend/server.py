@@ -117,6 +117,7 @@ class BookingCreate(BaseModel):
     discounts: list[str] = []                    # ["byo_supplies"]
 
 
+
 class RescheduleBody(BaseModel):
     preferred_date: str
     preferred_time: str
