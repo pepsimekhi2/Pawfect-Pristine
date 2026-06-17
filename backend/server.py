@@ -8,6 +8,7 @@ import re
 import logging
 import uuid
 import httpx
+import html
 from urllib.parse import quote_plus
 from fastapi import FastAPI, APIRouter, HTTPException, Request, Depends, Response
 from starlette.middleware.cors import CORSMiddleware
@@ -39,6 +40,12 @@ ORIGIN_LABEL = os.environ.get('ORIGIN_LABEL', 'Decatur, GA')
 ADMIN_EMAIL = os.environ.get('ADMIN_EMAIL')
 ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD')
 ADMIN_PASSPHRASE = os.environ.get('ADMIN_PASSPHRASE', 'duck')
+RESEND_API_KEY = os.environ.get('RESEND_API_KEY')
+RESEND_FROM = os.environ.get('RESEND_FROM', 'Pawfect & Pristine <onboarding@resend.dev>')
+BREVO_FORM_URL = os.environ.get(
+    'BREVO_FORM_URL',
+    'https://d9cf8a8a.sibforms.com/serve/MUIFAPON8oiNFYtLkSZQDsRYsOuTwKHAkQulhC03ZdbGNA7bcWU6PnPZmnHb-O8tyxVT-M4HaU3S2FRcBBEQj0sfZ28J8dgJsw7RY6SFoieSfGdCFefSoLD3h0zw5s6voHCsGXWJwuKfFidda3Ne_1o1MjkzpsPovwLjRsQLtRh6bFjl9g-xqn58FsDFXuQ2_Q0luHTmCTET-cARwA=='
+)
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
@@ -54,6 +61,7 @@ class RegisterPayload(BaseModel):
     email: EmailStr
     password: str
     phone: Optional[str] = None
+    marketing_opt_in: bool = False
 
 
 class LoginPayload(BaseModel):
@@ -198,6 +206,78 @@ def send_owner_sms(body: str) -> bool:
         return False
 
 
+async def subscribe_to_brevo(email: str) -> bool:
+    if not BREVO_FORM_URL:
+        return False
+    form_data = {
+        "EMAIL": email,
+        "email_address_check": "",
+        "locale": "en",
+        "html_type": "simple",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
+            response = await client.post(
+                BREVO_FORM_URL,
+                data=form_data,
+                headers={"User-Agent": "PawfectPristine/1.0"},
+            )
+        if response.status_code >= 400:
+            logger.warning(f"Brevo signup failed for {email}: {response.status_code} {response.text[:120]}")
+            return False
+        return True
+    except Exception as e:
+        logger.warning(f"Brevo signup failed for {email}: {e}")
+        return False
+
+
+def welcome_offer_html(name: str) -> str:
+    safe_name = html.escape(name.strip() or "there")
+    return f"""
+    <div style="font-family:Arial,sans-serif;line-height:1.6;color:#1f2a24">
+      <h2>Welcome, {safe_name}.</h2>
+      <p>Thanks for joining Pawfect &amp; Pristine. Your first logged-in booking gets 25% off automatically.</p>
+      <p>Book whenever you are ready, and the discount will show in your running total before checkout.</p>
+      <p style="font-size:12px;color:#5f6f67">You can unsubscribe from promotional emails at any time.</p>
+    </div>
+    """
+
+
+async def send_resend_email(to_email: str, subject: str, html_body: str) -> bool:
+    if not RESEND_API_KEY:
+        return False
+    payload = {
+        "from": RESEND_FROM,
+        "to": [to_email],
+        "subject": subject,
+        "html": html_body,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            response = await client.post(
+                "https://api.resend.com/emails",
+                json=payload,
+                headers={"Authorization": f"Bearer {RESEND_API_KEY}"},
+            )
+        if response.status_code >= 400:
+            logger.warning(f"Resend email failed for {to_email}: {response.status_code} {response.text[:120]}")
+            return False
+        return True
+    except Exception as e:
+        logger.warning(f"Resend email failed for {to_email}: {e}")
+        return False
+
+
+async def is_first_time_customer(user: Optional[dict]) -> bool:
+    if not user:
+        return False
+    existing = await db.bookings.find_one(
+        {"user_id": user["id"], "status": {"$ne": "cancelled"}},
+        {"_id": 1},
+    )
+    return existing is None
+
+
 async def check_brute_force(identifier: str):
     rec = await db.login_attempts.find_one({"identifier": identifier})
     if rec and rec.get("count", 0) >= 5:
@@ -276,6 +356,8 @@ async def register(payload: RegisterPayload, request: Request, response: Respons
         raise HTTPException(status_code=400, detail="Password must be at least 8 characters.")
     if not re.match(r"^[A-Za-z0-9\s'\-\.]{2,80}$", payload.name.strip()):
         raise HTTPException(status_code=400, detail="Please enter a valid name.")
+    if not payload.marketing_opt_in:
+        raise HTTPException(status_code=400, detail="Please agree to receive promotional emails to create an account.")
 
     email = payload.email.lower().strip()
     existing = await db.users.find_one({"email": email})
@@ -289,6 +371,8 @@ async def register(payload: RegisterPayload, request: Request, response: Respons
         "phone": (payload.phone or "").strip() or None,
         "password_hash": hash_password(payload.password),
         "role": "customer",
+        "marketing_opt_in": True,
+        "marketing_opt_in_at": datetime.now(timezone.utc),
         "created_at": datetime.now(timezone.utc),
     }
     await db.users.insert_one(user_doc)
@@ -296,6 +380,12 @@ async def register(payload: RegisterPayload, request: Request, response: Respons
     asyncio.create_task(fb.put(f"users/{user_doc['id']}", fb.safe_serializable({
         **user_doc, "password_hash": None,
     })))
+    asyncio.create_task(subscribe_to_brevo(email))
+    asyncio.create_task(send_resend_email(
+        email,
+        "Your 25% off first-booking offer",
+        welcome_offer_html(user_doc["name"]),
+    ))
     token = create_access_token(user_doc["id"], email)
     response.set_cookie(key="access_token", value=token, httponly=True, secure=False, samesite="lax",
                         max_age=60 * 60 * 24 * 7, path="/")
@@ -374,7 +464,9 @@ async def catalog():
 
 
 @api_router.post("/quote")
-async def quote(payload: QuotePayload):
+async def quote(payload: QuotePayload, request: Request):
+    user = await maybe_current_user(request)
+    first_time_customer = await is_first_time_customer(user)
     q = compute_quote(
         payload.service_value, payload.tier_key, payload.preferred_date,
         property_type=payload.property_type,
@@ -383,6 +475,7 @@ async def quote(payload: QuotePayload):
         pet_count=payload.pet_count,
         addon_keys=payload.addons,
         discount_keys=payload.discounts,
+        first_time_customer=first_time_customer,
     )
     return q
 
@@ -448,6 +541,7 @@ async def create_booking(payload: BookingCreate, request: Request):
                 detail="That time slot overlaps another booking. Please pick a different time."
             )
 
+    first_time_customer = await is_first_time_customer(user)
     quote_data = compute_quote(
         payload.service_value, payload.tier_key, payload.preferred_date,
         property_type=payload.property_type,
@@ -456,6 +550,7 @@ async def create_booking(payload: BookingCreate, request: Request):
         pet_count=payload.pet_count,
         addon_keys=payload.addons,
         discount_keys=payload.discounts,
+        first_time_customer=first_time_customer,
     )
 
     # Compute ETA if possible
