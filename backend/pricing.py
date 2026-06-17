@@ -95,6 +95,7 @@ SERVICE_CATALOG = {
 
 ADVANCE_FEE_USD = 0.99
 ADVANCE_FEE_DAYS = 7
+FIRST_TIME_DISCOUNT_PCT = 0.25
 
 # Booking time window (24h local time, military). Earliest start, latest start.
 BOOKING_TIME_MIN = "09:00"
@@ -186,6 +187,7 @@ def compute_quote(
     pet_count: Optional[int] = None,
     addon_keys: Optional[list] = None,
     discount_keys: Optional[list] = None,
+    first_time_customer: bool = False,
 ) -> dict:
     """Compute the total price quote, factoring in upsells & discounts."""
     svc = SERVICE_CATALOG.get(service_value)
@@ -267,6 +269,11 @@ def compute_quote(
         discount_total += amount
         breakdown.append({"label": f"Discount · {d['label']} (−{int(d['pct']*100)}%)", "amount": -amount})
 
+    if first_time_customer:
+        amount = round(pre_discount * FIRST_TIME_DISCOUNT_PCT, 2)
+        discount_total += amount
+        breakdown.append({"label": "Discount - First-time customer offer (-25%)", "amount": -amount})
+
     after_discount = pre_discount - discount_total
 
     # --- Advance-booking fee (unchanged) ---
@@ -293,6 +300,7 @@ def compute_quote(
         "advance_fee": advance_fee,
         "discount_total": round(discount_total, 2),
         "property_modifier_pct": property_modifier_pct,
+        "first_time_customer_discount": first_time_customer,
         "total": total,
         "currency": "USD",
         "breakdown": breakdown,
