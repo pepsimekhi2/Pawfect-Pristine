@@ -5,7 +5,7 @@ import requests
 from datetime import datetime, timezone, timedelta
 from urllib.parse import unquote_plus
 
-BASE = os.environ.get("REACT_APP_BACKEND_URL", "https://7d251449-dcf6-49e0-a51f-406dbcd33d51.preview.emergentagent.com").rstrip("/")
+BASE = os.environ.get("REACT_APP_BACKEND_URL", "http://localhost:8000").rstrip("/")
 
 ADMIN_EMAIL = "admin@pawfectpristine.com"
 ADMIN_PASSWORD = "Pawfect2026!"
