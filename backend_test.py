@@ -5,11 +5,12 @@ Tests all backend endpoints per test_result.md requirements
 """
 import requests
 import json
+import os
 from datetime import datetime, timedelta
 from typing import Optional
 
 # Backend URL from frontend/.env
-BASE_URL = "https://7d251449-dcf6-49e0-a51f-406dbcd33d51.preview.emergentagent.com/api"
+BASE_URL = os.environ.get("BACKEND_URL", "http://localhost:8000/api").rstrip("/")
 
 # Test credentials
 ADMIN_EMAIL = "admin@pawfectpristine.com"
@@ -19,7 +20,8 @@ ADMIN_PASSWORD = "Pawfect2026!"
 TEST_USER = {
     "name": "Sarah Johnson",
     "email": "sarah.johnson@example.com",
-    "password": "SecurePass123!"
+    "password": "SecurePass123!",
+    "marketing_opt_in": True,
 }
 
 class Colors:
