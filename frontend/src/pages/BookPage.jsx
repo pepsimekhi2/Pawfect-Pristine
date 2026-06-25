@@ -26,8 +26,17 @@ function fireConfetti() {
   }
 }
 
-const TOTAL_STEPS = 5;
+const TOTAL_STEPS = 6;
 const ACCESS_LABELS = { home: "I'll be home", lockbox: "Lockbox / code", hidden_key: "Hidden key", garage_code: "Garage code", doorman: "Doorman / front desk", other: "Other" };
+const STEP_TITLES = [
+  "", // 1-indexed pad
+  "Pick a service",
+  "Customize your visit",
+  "Choose a date & time",
+  "Your details",
+  "How would you like to pay?",
+  "Review & confirm",
+];
 
 export default function BookPage() {
   const { user } = useAuth();
@@ -67,6 +76,7 @@ export default function BookPage() {
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
   const [paypalCapture, setPaypalCapture] = useState(null); // {orderId, captureId, amount}
 
+  const [catalogWarn, setCatalogWarn] = useState(false);
   // Prefill from user
   useEffect(() => {
     if (user) {
@@ -75,13 +85,25 @@ export default function BookPage() {
     }
   }, [user]);
 
-  // Catalog
+  // Catalog — try API, fall back to /catalog.json (works even on a misconfigured deploy)
   useEffect(() => {
-    api.get("/api/catalog").then((r) => {
-      setCatalog(r.data);
-      const svc = r.data[serviceValue];
+    let cancelled = false;
+    const applyCatalog = (data) => {
+      if (cancelled || !data) return;
+      setCatalog(data);
+      const svc = data[serviceValue];
       if (svc?.has_tiers && svc.tiers?.length) setTierKey(svc.tiers[0].key);
-    });
+    };
+    api.get("/api/catalog")
+      .then((r) => applyCatalog(r.data))
+      .catch(() => {
+        setCatalogWarn(true);
+        fetch("/catalog.json")
+          .then((r) => r.ok ? r.json() : null)
+          .then((data) => applyCatalog(data))
+          .catch(() => {});
+      });
+    return () => { cancelled = true; };
   }, []); // eslint-disable-line
 
   const services = useMemo(() => {
@@ -200,15 +222,16 @@ export default function BookPage() {
   const back = () => setStep((s) => Math.max(1, s - 1));
 
   const s1Valid = serviceValue && (!currentSvc?.has_tiers || tierKey);
-  const s2Valid = !!date && !!time;
-  const s3Valid = name.trim() && phone.trim() && address.trim() && accessMethod
+  const s2Valid = true; // customize step — all values have defaults
+  const s3Valid = !!date && !!time;
+  const s4Valid = name.trim() && phone.trim() && address.trim() && accessMethod
     && (accessMethod !== "other" || accessNotes.trim().length > 2);
   // For pay_later: just need cash method. For half/all-now: must have captured PayPal payment.
   const requiresPayPal = paymentPlan !== "pay_later" && paymentMethod === "paypal";
-  const s4Valid = paymentPlan === "pay_later"
+  const s5Valid = paymentPlan === "pay_later"
     ? paymentMethod === "cash"
     : (requiresPayPal && guidelinesAccepted && !!paypalCapture?.captureId);
-  const s5Valid = tosAccepted;
+  const s6Valid = tosAccepted;
 
   const submit = async () => {
     setSubmitting(true);
@@ -331,34 +354,38 @@ export default function BookPage() {
                     </div>
                   </>
                 )}
-                <AnimatePresence>
-                  {currentSvc && tierKey && currentSvc.upsells && (
-                    <motion.div
-                      key={`upsells-${serviceValue}`}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-                    >
-                      <UpsellPanel
-                        svc={currentSvc}
-                        upsells={currentSvc.upsells}
-                        propertyType={propertyType} setPropertyType={setPropertyType}
-                        bedrooms={bedrooms} setBedrooms={setBedrooms}
-                        bathrooms={bathrooms} setBathrooms={setBathrooms}
-                        petCount={petCount} setPetCount={setPetCount}
-                        addons={addons} setAddons={setAddons}
-                        discounts={discounts} setDiscounts={setDiscounts}
-                        quote={quote}
-                      />
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                {catalogWarn && (
+                  <div className="text-[12px] text-[var(--warn-text)] bg-[var(--warn-bg)] border border-[var(--warn-border)] rounded-lg p-3" data-testid="catalog-fallback-note">
+                    Using offline service list — live pricing temporarily unavailable. You can still complete your booking.
+                  </div>
+                )}
               </motion.div>
             )}
 
             {step === 2 && (
               <motion.div key="s2" {...fade} className="space-y-6">
+                <FieldLabel>Customize your visit</FieldLabel>
+                <p className="text-[13px] text-[var(--text-muted)] -mt-3">Tell us about the space (or skip — defaults work too).</p>
+                {currentSvc && tierKey && currentSvc.upsells ? (
+                  <UpsellPanel
+                    svc={currentSvc}
+                    upsells={currentSvc.upsells}
+                    propertyType={propertyType} setPropertyType={setPropertyType}
+                    bedrooms={bedrooms} setBedrooms={setBedrooms}
+                    bathrooms={bathrooms} setBathrooms={setBathrooms}
+                    petCount={petCount} setPetCount={setPetCount}
+                    addons={addons} setAddons={setAddons}
+                    discounts={discounts} setDiscounts={setDiscounts}
+                    quote={quote}
+                  />
+                ) : (
+                  <div className="text-[13px] text-[var(--text-muted)]">No customizations needed for this service — tap Next.</div>
+                )}
+              </motion.div>
+            )}
+
+            {step === 3 && (
+              <motion.div key="s3" {...fade} className="space-y-6">
                 <FieldLabel>When works for you?</FieldLabel>
                 <CalendarPicker value={date} onChange={setDate} testid="book-calendar" />
                 {date && (
@@ -377,8 +404,8 @@ export default function BookPage() {
               </motion.div>
             )}
 
-            {step === 3 && (
-              <motion.div key="s3" {...fade} className="space-y-4">
+            {step === 4 && (
+              <motion.div key="s4" {...fade} className="space-y-4">
                 <FieldLabel>Your details</FieldLabel>
                 <div className="grid md:grid-cols-2 gap-3">
                   <div>
@@ -446,8 +473,8 @@ export default function BookPage() {
               </motion.div>
             )}
 
-            {step === 4 && (
-              <motion.div key="s4" {...fade} className="space-y-5">
+            {step === 5 && (
+              <motion.div key="s5" {...fade} className="space-y-5">
                 <FieldLabel>How would you like to pay?</FieldLabel>
                 <div className="grid gap-3" data-testid="payment-plans">
                   <PlanCard
@@ -513,8 +540,8 @@ export default function BookPage() {
               </motion.div>
             )}
 
-            {step === 5 && (
-              <motion.div key="s5" {...fade} className="space-y-5">
+            {step === 6 && (
+              <motion.div key="s6" {...fade} className="space-y-5">
                 <FieldLabel>Review &amp; confirm</FieldLabel>
                 <div className="review-card" data-testid="review-card">
                   <Row k="Service" v={<>{currentSvc?.label}{currentTier ? <span className="text-[var(--text-muted)]"> · {currentTier.label}</span> : null}</>} />
@@ -571,12 +598,13 @@ export default function BookPage() {
                     (step === 1 && !s1Valid) ||
                     (step === 2 && !s2Valid) ||
                     (step === 3 && !s3Valid) ||
-                    (step === 4 && !s4Valid)
+                    (step === 4 && !s4Valid) ||
+                    (step === 5 && !s5Valid)
                   }>
                   Next →
                 </PrimaryButton>
               ) : (
-                <PrimaryButton testid="submit-btn" onClick={submit} disabled={!s5Valid || submitting}>
+                <PrimaryButton testid="submit-btn" onClick={submit} disabled={!s6Valid || submitting}>
                   {submitting ? "Sending\u2026" : (<><Send size={16} /> Confirm booking</>)}
                 </PrimaryButton>
               )}
