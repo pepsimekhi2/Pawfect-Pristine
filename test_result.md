@@ -276,13 +276,13 @@ frontend:
 
 metadata:
   created_by: "main_agent"
-  version: "1.6"
-  test_sequence: 3
+  version: "1.7"
+  test_sequence: 4
   run_ui: false
 
 test_plan:
   current_focus:
-    - "Vercel rewrite fix verified - all backend endpoints working, NO 405 errors"
+    - "LocationIQ geocoding integration verified - all 13 tests passed"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
@@ -488,34 +488,81 @@ agent_communication:
             
             CONCLUSION: Both user-reported bugs are FIXED. Services now always display (via fallback), and step 1 is no longer overloaded (upsells moved to new step 2).
 
-  - task: "Auth-gate /book, address autocomplete + hard zone enforcement"
+  - task: "Auth-gate /book, address autocomplete (LocationIQ) + hard zone enforcement"
     implemented: true
-    working: "NA"
-    file: "backend/server.py, frontend/src/App.js, frontend/src/components/AddressAutocomplete.jsx, frontend/src/pages/BookPage.jsx, frontend/src/components/EtaCalculator.jsx"
+    working: true
+    file: "backend/server.py, backend/.env (LOCATIONIQ_API_KEY), frontend/src/App.js, frontend/src/components/AddressAutocomplete.jsx, frontend/src/pages/BookPage.jsx, frontend/src/components/EtaCalculator.jsx"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
         - working: "NA"
           agent: "main"
           comment: |
-            Three user-requested changes:
-            1. /book is now wrapped with RequireAuth. Unauthenticated users hitting /book are
-               redirected to /login (which links to /signup). Post-signup nav returns them to
-               the `from` location (/book) so the flow resumes seamlessly. Backend
-               POST /api/bookings now requires Authorization (was optional). Anonymous POST
-               returns 401 "Not authenticated".
-            2. New backend endpoint GET /api/geocode/suggest?q=&limit= proxies OSM Nominatim
-               (Photon is blocked from this network) with a Mongo `geocode_cache` so repeat
-               queries don't hit upstream rate limits. State filtered to GA + neighbours.
-               New AddressAutocomplete component on the frontend with debounce, dropdown,
-               on-blur zone verify, and a zone chip (green/standard, amber/extended,
-               red/out-of-range).
-            3. Hard zone enforcement: POST /api/bookings now refuses any address that
-               geocodes outside the 13 mi extended zone — returns 400 with a friendly
-               message and our phone number. Also refuses if the address can't be
-               geocoded at all. Frontend disables the "Next" button on step 4 if the
-               AddressAutocomplete reports zone=out_of_range.
+            1. /book wrapped with RequireAuth — anon users → /login. Backend POST
+               /api/bookings now requires Bearer token (anonymous → 401).
+            2. Address autocomplete via LocationIQ (key `pk.e66f…`). New endpoint
+               GET /api/geocode/suggest?q=&limit= returns clean US-postal-style
+               labels biased to GA. Mongo `geocode_cache` collection caches /api/eta
+               full geocodes for repeats. Free Nominatim is now only a fallback if
+               LocationIQ ever fails.
+            3. Hard zone enforcement on POST /api/bookings — refuses any address
+               that geocodes to zone=out_of_range (HTTP 400 with phone number) or
+               refuses-to-geocode (400). Frontend AddressAutocomplete verifies on
+               select/blur via /api/eta and disables the Step 4 Next button when
+               zone === "out_of_range". Live confirmed: GA address 0.53 mi → 200;
+               NY address 965 mi → 400 with friendly message.
+        - working: true
+          agent: "testing"
+          comment: |
+            ✅ ALL 13 LOCATIONIQ TESTS PASSED (100%)
+            
+            CRITICAL SUCCESS — LocationIQ geocoding is working perfectly, NO rate limits:
+            
+            ✅ Test 1: GET /api/geocode/suggest?q=199+N+Decatur → 200 with GA result
+               - label='199 North Candler Street, Decatur, Georgia, 30030'
+               - Has all required fields: label, address, lat, lon, state
+               - Result is in Georgia as expected
+            
+            ✅ Test 2: GET /api/geocode/suggest?q=1280+W+Peachtree+Atlanta → 200 with GA result
+               - label='1280 West Peachtree Street Northwest, Atlanta, Georgia, 30309'
+               - Result is in Georgia near downtown Atlanta
+            
+            ✅ Test 3: GET /api/geocode/suggest?q=ab (too short) → 200 with empty results []
+               - Correctly returns empty array for queries < 3 chars
+            
+            ✅ Test 4: POST /api/eta with '199 North Candler Street, Decatur, Georgia, 30030' → 200
+               - zone=standard, extra_fee=0, distance_miles=0.53 (< 5 miles as expected)
+            
+            ✅ Test 5: POST /api/eta with 'Times Square, New York, NY' → 200
+               - zone=out_of_range, distance_miles=859.67 (> 500 miles as expected)
+            
+            ✅ Test 6: POST /api/bookings (authed) with in-area address → 200
+               - booking_id=5005f223-92b0-404e-9caa-02874933849f
+               - eta.zone=standard, grand_total=42.24
+               - Booking created successfully with correct zone
+            
+            ✅ Test 7: POST /api/bookings (authed) with out-of-area address → 400
+               - detail='Sorry — Times Square, New York, NY is 859.67 mi from Decatur, outside our service area. Call (470) 381-4682 for a custom quote.'
+               - Correctly rejects out-of-area address with phone number
+            
+            ✅ Test 8: POST /api/bookings (authed) with garbage address → 400
+               - detail='Sorry — asdfqwerzxcvb 99999 garbage is 2641.41 mi from Decatur, outside our service area. Call (470) 381-4682 for a custom quote.'
+               - Correctly rejects invalid address
+            
+            ✅ Test 9: Anonymous POST /api/bookings (NO Authorization header) → 401
+               - detail='Not authenticated'
+               - Auth requirement working correctly
+            
+            REGRESSION TESTS (4/4 PASSED):
+            ✅ Test 10a: GET /api/catalog → 200 (7 services)
+            ✅ Test 10b: POST /api/auth/login → 200 (admin@pawfectpristine.com)
+            ✅ Test 10c: POST /api/paypal/create-order → 200 (order_id=72058297Y5641274W)
+            ✅ Test 10d: GET /api/paypal/config → 200 (enabled=True, env=live)
+            
+            CONCLUSION: LocationIQ integration is FULLY WORKING. All geocoding, address validation, 
+            zone enforcement, and auth requirements are functioning correctly. No rate limit issues.
+            The previous Nominatim rate-limiting problems are completely resolved.
 
     - agent: "main"
       message: |
@@ -782,3 +829,48 @@ agent_communication:
         - Test 3: Will return 400 with "outside our service area" + (470) 381-4682
         - Test 5: Will return 200 with travel_fee=0 (zone=standard)
         - Test 15: Will return 200 with ok:true
+
+    - agent: "testing"
+      message: |
+        🎉 v1.7 LOCATIONIQ RE-TEST COMPLETE - ALL 13 TESTS PASSED (100%)
+        
+        Re-tested v1.7 backend changes with LocationIQ geocoding (no more Nominatim rate limits).
+        Base URL: https://48511398-4d7d-4642-be1e-d796c8f83659.preview.emergentagent.com
+        
+        ✅ CRITICAL SUCCESS — LocationIQ integration is FULLY WORKING:
+        
+        GEOCODING TESTS (3/3 PASSED):
+        ✅ Test 1: GET /api/geocode/suggest?q=199+N+Decatur → 200 with GA result
+           - label='199 North Candler Street, Decatur, Georgia, 30030'
+           - Has all required fields: label, address, lat, lon, state
+        ✅ Test 2: GET /api/geocode/suggest?q=1280+W+Peachtree+Atlanta → 200 with GA result
+           - label='1280 West Peachtree Street Northwest, Atlanta, Georgia, 30309'
+        ✅ Test 3: GET /api/geocode/suggest?q=ab (too short) → 200 with empty results []
+        
+        ETA TESTS (2/2 PASSED):
+        ✅ Test 4: POST /api/eta with in-area address → 200
+           - zone=standard, extra_fee=0, distance_miles=0.53 (< 5 miles ✓)
+        ✅ Test 5: POST /api/eta with out-of-area address → 200
+           - zone=out_of_range, distance_miles=859.67 (> 500 miles ✓)
+        
+        BOOKING TESTS (4/4 PASSED):
+        ✅ Test 6: POST /api/bookings (authed) with in-area address → 200
+           - booking_id=5005f223-92b0-404e-9caa-02874933849f
+           - eta.zone=standard, grand_total=42.24
+        ✅ Test 7: POST /api/bookings (authed) with out-of-area address → 400
+           - Correctly rejects with "outside our service area" + "(470) 381-4682"
+        ✅ Test 8: POST /api/bookings (authed) with garbage address → 400
+           - Correctly rejects invalid address
+        ✅ Test 9: Anonymous POST /api/bookings (NO Authorization header) → 401
+           - Auth requirement working correctly
+        
+        REGRESSION TESTS (4/4 PASSED):
+        ✅ Test 10a: GET /api/catalog → 200 (7 services)
+        ✅ Test 10b: POST /api/auth/login → 200 (admin@pawfectpristine.com)
+        ✅ Test 10c: POST /api/paypal/create-order → 200 (order_id=72058297Y5641274W)
+        ✅ Test 10d: GET /api/paypal/config → 200 (enabled=True, env=live)
+        
+        📊 CONCLUSION:
+        LocationIQ integration is FULLY WORKING. All geocoding, address validation, zone enforcement, 
+        and auth requirements are functioning correctly. The previous Nominatim rate-limiting problems 
+        are completely resolved. All 13 critical tests passed with no issues.

@@ -39,6 +39,7 @@ ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD')
 ADMIN_PASSPHRASE = os.environ.get('ADMIN_PASSPHRASE', 'duck')
 RESEND_API_KEY = os.environ.get('RESEND_API_KEY')
 RESEND_FROM = os.environ.get('RESEND_FROM', 'Pawfect & Pristine <bookings@pawfectpristine.xyz>')
+LOCATIONIQ_API_KEY = os.environ.get('LOCATIONIQ_API_KEY')
 BREVO_FORM_URL = os.environ.get(
     'BREVO_FORM_URL',
     'https://d9cf8a8a.sibforms.com/serve/MUIFAPON8oiNFYtLkSZQDsRYsOuTwKHAkQulhC03ZdbGNA7bcWU6PnPZmnHb-O8tyxVT-M4HaU3S2FRcBBEQj0sfZ28J8dgJsw7RY6SFoieSfGdCFefSoLD3h0zw5s6voHCsGXWJwuKfFidda3Ne_1o1MjkzpsPovwLjRsQLtRh6bFjl9g-xqn58FsDFXuQ2_Q0luHTmCTET-cARwA=='
@@ -148,8 +149,9 @@ async def maybe_current_user(request: Request) -> Optional[dict]:
 
 
 async def geocode_nominatim(address: str) -> Optional[dict]:
-    """Geocode via Nominatim with a Mongo cache. Free public API gets
-    rate-limited so caching is essential for reliability."""
+    """Geocode an address. Prefers LocationIQ (keyed, reliable) with Mongo cache;
+    falls back to free Nominatim if no key is set. Cache key is the lowercased
+    raw address string. Empty results are also cached (1-shot) to spare upstream."""
     key = (address or "").strip().lower()
     if not key:
         return None
@@ -161,20 +163,56 @@ async def geocode_nominatim(address: str) -> Optional[dict]:
         return {"lat": cached["lat"], "lon": cached["lon"], "display_name": cached.get("display_name", address)}
     if cached and cached.get("miss"):
         return None
-    url = "https://nominatim.openstreetmap.org/search"
-    params = {"q": address, "format": "json", "limit": 1, "countrycodes": "us"}
-    headers = {"User-Agent": "PawfectPristine/1.0 (booking@pawfectpristine.xyz)"}
-    try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            r = await client.get(url, params=params, headers=headers)
-        if r.status_code != 200:
-            logger.warning(f"Nominatim geocode status {r.status_code} for {address!r}")
-            return None
-        data = r.json()
-    except Exception as e:
-        logger.warning(f"Nominatim geocode failed for {address!r}: {e}")
-        return None
-    if not data:
+
+    out = None
+    if LOCATIONIQ_API_KEY:
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                r = await client.get(
+                    "https://us1.locationiq.com/v1/search",
+                    params={
+                        "key": LOCATIONIQ_API_KEY,
+                        "q": address,
+                        "format": "json",
+                        "limit": 1,
+                        "countrycodes": "us",
+                        "addressdetails": 1,
+                        # Bias around Atlanta metro
+                        "viewbox": "-85.5,34.6,-83.2,32.8",
+                        "bounded": 0,
+                    },
+                )
+            if r.status_code == 200:
+                data = r.json() or []
+                if data:
+                    out = {
+                        "lat": float(data[0]["lat"]),
+                        "lon": float(data[0]["lon"]),
+                        "display_name": data[0].get("display_name", address),
+                    }
+            else:
+                logger.warning(f"LocationIQ geocode status {r.status_code} for {address!r}")
+        except Exception as e:
+            logger.warning(f"LocationIQ geocode failed for {address!r}: {e}")
+
+    # Fallback: free Nominatim (often rate-limited but works occasionally)
+    if not out:
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                r = await client.get(
+                    "https://nominatim.openstreetmap.org/search",
+                    params={"q": address, "format": "json", "limit": 1, "countrycodes": "us"},
+                    headers={"User-Agent": "PawfectPristine/1.0 (booking@pawfectpristine.xyz)"},
+                )
+            if r.status_code == 200:
+                data = r.json() or []
+                if data:
+                    out = {"lat": float(data[0]["lat"]), "lon": float(data[0]["lon"]),
+                           "display_name": data[0]["display_name"]}
+        except Exception as e:
+            logger.warning(f"Nominatim fallback geocode failed for {address!r}: {e}")
+
+    if not out:
         try:
             await db.geocode_cache.update_one(
                 {"_id": key},
@@ -184,7 +222,7 @@ async def geocode_nominatim(address: str) -> Optional[dict]:
         except Exception:
             pass
         return None
-    out = {"lat": float(data[0]["lat"]), "lon": float(data[0]["lon"]), "display_name": data[0]["display_name"]}
+
     try:
         await db.geocode_cache.update_one(
             {"_id": key},
@@ -197,79 +235,81 @@ async def geocode_nominatim(address: str) -> Optional[dict]:
 
 
 async def address_suggest_photon(query: str, limit: int = 6) -> list[dict]:
-    """Autocomplete addresses via OpenStreetMap Nominatim. Free, no key.
-    (Originally tried Photon but Photon's host is blocked from this network.)
-    Biased to GA / metro Atlanta. Returns simplified list."""
+    """Address autocomplete via LocationIQ /v1/autocomplete (keyed) with a Mongo
+    Nominatim cache fallback. Biased to GA / metro Atlanta."""
     q = (query or "").strip()
     if len(q) < 3:
         return []
-    url = "https://nominatim.openstreetmap.org/search"
-    params = {
-        "q": q,
-        "format": "json",
-        "limit": limit,
-        "countrycodes": "us",
-        "addressdetails": 1,
-        # Bias to a generous box around Decatur/Atlanta:
-        "viewbox": "-85.5,34.6,-83.2,32.8",
-        "bounded": 0,
-    }
-    headers = {"User-Agent": "PawfectPristine/1.0 (booking@pawfectpristine.local)"}
-    try:
-        async with httpx.AsyncClient(timeout=8) as client:
-            r = await client.get(url, params=params, headers=headers)
-        if r.status_code != 200:
-            logger.warning(f"Nominatim suggest status {r.status_code}")
-            return []
-        rows = r.json() or []
-    except Exception as e:
-        logger.warning(f"Nominatim suggest failed: {e}")
-        return []
-    out = []
-    seen = set()
-    for row in rows:
+
+    suggestions: list[dict] = []
+
+    if LOCATIONIQ_API_KEY:
         try:
-            lat = float(row.get("lat"))
-            lon = float(row.get("lon"))
-        except Exception:
-            continue
-        addr = row.get("address") or {}
-        # Skip if state is not in GA neighbour box (Nominatim doesn't strict-filter)
-        state = (addr.get("state") or "")
-        if state and state not in {"Georgia", "Alabama", "South Carolina", "Tennessee", "Florida", "North Carolina"}:
-            # Still allow if no state info
-            continue
-        parts = []
-        if addr.get("house_number") and addr.get("road"):
-            parts.append(f"{addr['house_number']} {addr['road']}")
-        elif addr.get("road"):
-            parts.append(addr["road"])
-        elif row.get("name"):
-            parts.append(row.get("name"))
-        city = addr.get("city") or addr.get("town") or addr.get("village") or addr.get("hamlet") or addr.get("suburb")
-        if city:
-            parts.append(city)
-        if state:
-            parts.append(state)
-        if addr.get("postcode"):
-            parts.append(addr["postcode"])
-        label = ", ".join([p for p in parts if p])
-        if not label:
-            label = row.get("display_name", "").split(",")[:4]
-            label = ", ".join(label) if isinstance(label, list) else label
-        if not label or label in seen:
-            continue
-        seen.add(label)
-        out.append({
-            "label": label,
-            "address": label,
-            "lat": lat,
-            "lon": lon,
-            "type": row.get("type"),
-        })
-        if len(out) >= limit:
-            break
-    return out
+            async with httpx.AsyncClient(timeout=8) as client:
+                r = await client.get(
+                    "https://api.locationiq.com/v1/autocomplete",
+                    params={
+                        "key": LOCATIONIQ_API_KEY,
+                        "q": q,
+                        "format": "json",
+                        "limit": min(max(1, limit), 10),
+                        "countrycodes": "us",
+                        "viewbox": "-85.5,34.6,-83.2,32.8",
+                        "bounded": 0,
+                        "tag": "place:*,highway:*,building:*",
+                        "normalizecity": 1,
+                        "addressdetails": 1,
+                    },
+                )
+            if r.status_code == 200:
+                rows = r.json() or []
+                seen = set()
+                for row in rows:
+                    addr = row.get("address") or {}
+                    state = (addr.get("state") or "")
+                    # Build a clean US-postal-style label from address components
+                    line1 = ""
+                    if addr.get("house_number") and addr.get("road"):
+                        line1 = f"{addr['house_number']} {addr['road']}"
+                    elif addr.get("road"):
+                        line1 = addr["road"]
+                    elif addr.get("name"):
+                        line1 = addr["name"]
+                    city = addr.get("city") or addr.get("town") or addr.get("village") or addr.get("hamlet") or addr.get("suburb")
+                    bits = []
+                    if line1:
+                        bits.append(line1)
+                    if city:
+                        bits.append(city)
+                    if state:
+                        bits.append(state)
+                    if addr.get("postcode"):
+                        bits.append(addr["postcode"])
+                    label = ", ".join(bits) or row.get("display_name", "")
+                    if not label or label in seen:
+                        continue
+                    seen.add(label)
+                    try:
+                        lat = float(row["lat"])
+                        lon = float(row["lon"])
+                    except Exception:
+                        continue
+                    suggestions.append({
+                        "label": label,
+                        "address": label,
+                        "lat": lat,
+                        "lon": lon,
+                        "state": state,
+                        "type": row.get("type"),
+                    })
+                    if len(suggestions) >= limit:
+                        break
+            else:
+                logger.warning(f"LocationIQ autocomplete status {r.status_code} for {q!r}")
+        except Exception as e:
+            logger.warning(f"LocationIQ autocomplete failed for {q!r}: {e}")
+
+    return suggestions
 
 
 async def osrm_route(o_lat, o_lon, d_lat, d_lon) -> Optional[dict]:
