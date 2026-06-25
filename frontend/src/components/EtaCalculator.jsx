@@ -1,11 +1,9 @@
 import React, { useState } from "react";
-import axios from "axios";
 import { motion, AnimatePresence } from "framer-motion";
 import { MapPin, Clock, AlertTriangle, Phone, Sparkles } from "lucide-react";
 import { PrimaryButton } from "./ui-kit";
 import AddressAutocomplete from "./AddressAutocomplete";
-
-const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+import api from "../lib/api";
 
 const zoneStyles = {
   standard: { bg: "var(--green-light)", border: "#c2dfc9", icon: "✓", iconColor: "var(--green)" },
@@ -26,7 +24,7 @@ export default function EtaCalculator() {
     setError("");
     setResult(null);
     try {
-      const { data } = await axios.post(`${API}/eta`, { address: address.trim() });
+      const { data } = await api.post(`/api/eta`, { address: address.trim() });
       setResult(data);
     } catch (err) {
       setError(err?.response?.data?.detail || "Something went wrong. Try again.");
