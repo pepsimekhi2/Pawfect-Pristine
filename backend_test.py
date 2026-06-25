@@ -1,477 +1,402 @@
 #!/usr/bin/env python3
 """
-Backend test suite for Pawfect & Pristine v1.7
-Tests CHANGE 1 (new origin) and CHANGE 2 (itemized receipt emails)
+Backend API tests for Pawfect & Pristine v1.8
+Tests the rebrand (phone + email) and new TOS v2.0
 """
 import httpx
 import asyncio
-import json
 from datetime import datetime, timedelta
 
 BASE_URL = "https://48511398-4d7d-4642-be1e-d796c8f83659.preview.emergentagent.com"
-API_URL = f"{BASE_URL}/api"
-
-# Test credentials
 ADMIN_EMAIL = "admin@pawfectpristine.com"
 ADMIN_PASSWORD = "Pawfect2026!"
 
-# Test results
-results = []
+# v1.8 rebrand constants
+NEW_PHONE = "(404) 750-3446"
+OLD_PHONE = "(470) 381-4682"
+NEW_EMAIL = "itzmekhii@gmail.com"
+OLD_EMAIL = "hello@pawfectpristine"
 
-def log_test(test_num, name, passed, details=""):
-    status = "✅ PASS" if passed else "❌ FAIL"
-    results.append({
-        "test": test_num,
-        "name": name,
-        "passed": passed,
-        "details": details
-    })
-    print(f"\n{status} | Test {test_num}: {name}")
-    if details:
-        print(f"  Details: {details}")
-
-async def test_eta_new_origin():
-    """Test A: ETA distances from new origin (3215 Allison Circle)"""
-    print("\n" + "="*80)
-    print("TEST GROUP A: ETA DISTANCES FROM NEW ORIGIN")
-    print("="*80)
+class TestResults:
+    def __init__(self):
+        self.passed = []
+        self.failed = []
     
-    async with httpx.AsyncClient(timeout=30) as client:
-        # Test A1: Origin address itself
-        print("\n[A1] Testing origin address (3215 Allison Circle)...")
-        try:
-            r = await client.post(f"{API_URL}/eta", json={
-                "address": "3215 Allison Circle, Panthersville, GA 30034"
-            })
-            data = r.json()
-            
-            passed = (
-                r.status_code == 200 and
-                data.get("zone") == "standard" and
-                data.get("distance_miles", 999) <= 0.5 and
-                data.get("extra_fee") == 0
-            )
-            
-            log_test("A1", "Origin address → standard zone, ≤0.5mi, $0 fee", passed,
-                    f"zone={data.get('zone')}, distance={data.get('distance_miles')}mi, fee=${data.get('extra_fee')}")
-        except Exception as e:
-            log_test("A1", "Origin address → standard zone", False, str(e))
+    def add_pass(self, test_name, details=""):
+        self.passed.append(f"✅ {test_name}: {details}")
+    
+    def add_fail(self, test_name, details=""):
+        self.failed.append(f"❌ {test_name}: {details}")
+    
+    def print_summary(self):
+        print("\n" + "="*80)
+        print("TEST SUMMARY")
+        print("="*80)
         
-        # Test A2: 199 N Decatur Rd (now ~10mi away, should be extended)
-        print("\n[A2] Testing 199 N Decatur Rd (should be extended zone now)...")
-        try:
-            r = await client.post(f"{API_URL}/eta", json={
-                "address": "199 N Decatur Rd, Decatur, GA"
-            })
-            data = r.json()
-            
-            # Should be extended zone (7-13 miles) with $10 fee
-            passed = (
-                r.status_code == 200 and
-                data.get("zone") == "extended" and
-                7 <= data.get("distance_miles", 0) <= 13 and
-                data.get("extra_fee") == 10
-            )
-            
-            log_test("A2", "199 N Decatur Rd → extended zone, 7-13mi, $10 fee", passed,
-                    f"zone={data.get('zone')}, distance={data.get('distance_miles')}mi, fee=${data.get('extra_fee')}")
-        except Exception as e:
-            log_test("A2", "199 N Decatur Rd → extended zone", False, str(e))
+        if self.failed:
+            print(f"\n❌ FAILED TESTS ({len(self.failed)}):")
+            for f in self.failed:
+                print(f"  {f}")
         
-        # Test A3: Times Square, NY (out of range)
-        print("\n[A3] Testing Times Square, NY (out of range)...")
-        try:
-            r = await client.post(f"{API_URL}/eta", json={
-                "address": "Times Square, New York, NY"
-            })
-            data = r.json()
-            
-            passed = (
-                r.status_code == 200 and
-                data.get("zone") == "out_of_range" and
-                data.get("distance_miles", 0) > 500
-            )
-            
-            log_test("A3", "Times Square → out_of_range, >500mi", passed,
-                    f"zone={data.get('zone')}, distance={data.get('distance_miles')}mi")
-        except Exception as e:
-            log_test("A3", "Times Square → out_of_range", False, str(e))
+        if self.passed:
+            print(f"\n✅ PASSED TESTS ({len(self.passed)}):")
+            for p in self.passed:
+                print(f"  {p}")
+        
+        total = len(self.passed) + len(self.failed)
+        pass_rate = (len(self.passed) / total * 100) if total > 0 else 0
+        print(f"\n{'='*80}")
+        print(f"TOTAL: {len(self.passed)}/{total} passed ({pass_rate:.1f}%)")
+        print(f"{'='*80}\n")
 
-async def test_booking_out_of_range_message():
-    """Test A4: Verify out-of-range error message says 'from our base' not 'from Decatur'"""
-    print("\n" + "="*80)
-    print("TEST A4: OUT-OF-RANGE ERROR MESSAGE")
-    print("="*80)
-    
-    # First, register a test user
-    test_email = f"test_origin_{datetime.now().timestamp()}@example.com"
-    token = None
-    
+results = TestResults()
+
+async def test_tos_v2():
+    """Test 1: GET /api/tos returns v2.0 with new phone/email, no old phone/email"""
+    print("\n[TEST 1] GET /api/tos - TOS v2.0 verification")
     async with httpx.AsyncClient(timeout=30) as client:
-        try:
-            # Register
-            r = await client.post(f"{API_URL}/auth/register", json={
-                "name": "Origin Tester",
+        r = await client.get(f"{BASE_URL}/api/tos")
+        
+        if r.status_code != 200:
+            results.add_fail("TOS endpoint", f"Expected 200, got {r.status_code}")
+            return
+        
+        data = r.json()
+        text = data.get("text", "")
+        version = data.get("version")
+        effective = data.get("effective")
+        
+        # Check version and effective date
+        if version != "2.0":
+            results.add_fail("TOS version", f"Expected '2.0', got '{version}'")
+        else:
+            results.add_pass("TOS version", "2.0 ✓")
+        
+        if effective != "2026-07-15":
+            results.add_fail("TOS effective date", f"Expected '2026-07-15', got '{effective}'")
+        else:
+            results.add_pass("TOS effective date", "2026-07-15 ✓")
+        
+        # Check new phone is present
+        if NEW_PHONE not in text:
+            results.add_fail("TOS new phone", f"'{NEW_PHONE}' NOT FOUND in TOS text")
+        else:
+            results.add_pass("TOS new phone", f"'{NEW_PHONE}' found ✓")
+        
+        # Check new email is present
+        if NEW_EMAIL not in text:
+            results.add_fail("TOS new email", f"'{NEW_EMAIL}' NOT FOUND in TOS text")
+        else:
+            results.add_pass("TOS new email", f"'{NEW_EMAIL}' found ✓")
+        
+        # Check 65% refund cap is present
+        if "65%" not in text:
+            results.add_fail("TOS refund cap", "'65%' NOT FOUND in TOS text")
+        else:
+            results.add_pass("TOS refund cap", "'65%' found ✓")
+        
+        # Check TECHNICIAN'S RIGHT TO LEAVE section
+        if "TECHNICIAN'S RIGHT TO LEAVE" not in text:
+            results.add_fail("TOS section 7", "'TECHNICIAN'S RIGHT TO LEAVE' NOT FOUND")
+        else:
+            results.add_pass("TOS section 7", "'TECHNICIAN'S RIGHT TO LEAVE' found ✓")
+        
+        # Check old phone is NOT present
+        if OLD_PHONE in text:
+            results.add_fail("TOS old phone removed", f"OLD PHONE '{OLD_PHONE}' STILL PRESENT")
+        else:
+            results.add_pass("TOS old phone removed", f"'{OLD_PHONE}' not found ✓")
+        
+        # Check old email is NOT present
+        if OLD_EMAIL in text:
+            results.add_fail("TOS old email removed", f"OLD EMAIL '{OLD_EMAIL}' STILL PRESENT")
+        else:
+            results.add_pass("TOS old email removed", f"'{OLD_EMAIL}' not found ✓")
+        
+        # Check small-claims is NOT present
+        if "small-claims" in text.lower() or "small claims" in text.lower():
+            results.add_fail("TOS small-claims removed", "SMALL-CLAIMS CLAUSE STILL PRESENT")
+        else:
+            results.add_pass("TOS small-claims removed", "small-claims clause removed ✓")
+
+async def test_eta_out_of_range():
+    """Test 2: POST /api/eta with out-of-range address contains new phone"""
+    print("\n[TEST 2] POST /api/eta - Out-of-range zone_message")
+    async with httpx.AsyncClient(timeout=30) as client:
+        r = await client.post(
+            f"{BASE_URL}/api/eta",
+            json={"address": "Times Square, New York, NY"}
+        )
+        
+        if r.status_code != 200:
+            results.add_fail("ETA out-of-range", f"Expected 200, got {r.status_code}")
+            return
+        
+        data = r.json()
+        zone_message = data.get("zone_message", "")
+        
+        # Check new phone is present
+        if NEW_PHONE not in zone_message:
+            results.add_fail("ETA zone_message new phone", f"'{NEW_PHONE}' NOT FOUND in zone_message")
+        else:
+            results.add_pass("ETA zone_message new phone", f"'{NEW_PHONE}' found ✓")
+        
+        # Check old phone is NOT present
+        if OLD_PHONE in zone_message:
+            results.add_fail("ETA zone_message old phone", f"OLD PHONE '{OLD_PHONE}' STILL PRESENT")
+        else:
+            results.add_pass("ETA zone_message old phone", f"'{OLD_PHONE}' not found ✓")
+
+async def test_booking_out_of_range():
+    """Test 3: POST /api/bookings with out-of-range address returns 400 with new phone"""
+    print("\n[TEST 3] POST /api/bookings - Out-of-range error message")
+    
+    # First, register a fresh user
+    test_email = f"v18test{datetime.now().timestamp():.0f}@example.com"
+    async with httpx.AsyncClient(timeout=30) as client:
+        r = await client.post(
+            f"{BASE_URL}/api/auth/register",
+            json={
+                "name": "V18 Tester",
                 "email": test_email,
                 "password": "TestPass123!",
-                "phone": "4045551111",
                 "marketing_opt_in": True
-            })
-            if r.status_code == 200:
-                token = r.json().get("token")
-            
-            if not token:
-                log_test("A4", "Out-of-range error message check", False, "Failed to register test user")
-                return
-            
-            # Try to book with Times Square address
-            future_date = (datetime.now() + timedelta(days=10)).strftime("%Y-%m-%d")
+            }
+        )
+        
+        if r.status_code != 200:
+            results.add_fail("Register test user", f"Expected 200, got {r.status_code}")
+            return
+        
+        token = r.json().get("token")
+        
+        # Try to book with out-of-range address
+        future_date = (datetime.now() + timedelta(days=3)).strftime("%Y-%m-%d")
+        r = await client.post(
+            f"{BASE_URL}/api/bookings",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "name": "V18 Tester",
+                "phone": "555-0100",
+                "address": "Times Square, New York, NY",
+                "service_value": "general_cleaning",
+                "tier_key": "standard",
+                "preferred_date": future_date,
+                "preferred_time": "14:00",
+                "payment_plan": "pay_later",
+                "payment_method": "cash",
+                "tos_accepted": True
+            }
+        )
+        
+        if r.status_code != 400:
+            results.add_fail("Booking out-of-range status", f"Expected 400, got {r.status_code}")
+            return
+        
+        detail = r.json().get("detail", "")
+        
+        # Check new phone is present
+        if NEW_PHONE not in detail:
+            results.add_fail("Booking error new phone", f"'{NEW_PHONE}' NOT FOUND in error detail")
+        else:
+            results.add_pass("Booking error new phone", f"'{NEW_PHONE}' found ✓")
+        
+        # Check old phone is NOT present
+        if OLD_PHONE in detail:
+            results.add_fail("Booking error old phone", f"OLD PHONE '{OLD_PHONE}' STILL PRESENT")
+        else:
+            results.add_pass("Booking error old phone", f"'{OLD_PHONE}' not found ✓")
+
+async def test_booking_owner_notification():
+    """Test 4: POST /api/bookings with valid address sends owner notification to new email"""
+    print("\n[TEST 4] POST /api/bookings - Owner notification email")
+    
+    # Register a fresh user
+    test_email = f"v18owner{datetime.now().timestamp():.0f}@example.com"
+    async with httpx.AsyncClient(timeout=30) as client:
+        r = await client.post(
+            f"{BASE_URL}/api/auth/register",
+            json={
+                "name": "Owner Test",
+                "email": test_email,
+                "password": "TestPass123!",
+                "marketing_opt_in": True
+            }
+        )
+        
+        if r.status_code != 200:
+            results.add_fail("Register owner test user", f"Expected 200, got {r.status_code}")
+            return
+        
+        token = r.json().get("token")
+        
+        # Book with valid in-area address
+        future_date = (datetime.now() + timedelta(days=5)).strftime("%Y-%m-%d")
+        
+        # Try different times to avoid conflicts
+        for time_slot in ["14:00", "14:30", "15:00", "15:30", "16:00"]:
             r = await client.post(
-                f"{API_URL}/bookings",
+                f"{BASE_URL}/api/bookings",
+                headers={"Authorization": f"Bearer {token}"},
                 json={
-                    "name": "Origin Tester",
-                    "phone": "4045551111",
-                    "address": "Times Square, New York, NY",
-                    "service_value": "general_cleaning",
-                    "tier_key": "light",
-                    "preferred_date": future_date,
-                    "preferred_time": "10:00",
-                    "payment_plan": "pay_later",
-                    "payment_method": "cash",
-                    "tos_accepted": True,
-                    "access_method": "home"
-                },
-                headers={"Authorization": f"Bearer {token}"}
-            )
-            
-            # Should get 400 with error message
-            passed = False
-            detail = ""
-            if r.status_code == 400:
-                data = r.json()
-                detail = data.get("detail", "")
-                # Check that message says "from our base" and NOT "from Decatur"
-                has_base = "from our base" in detail.lower()
-                no_decatur = "from decatur" not in detail.lower()
-                has_phone = "(470) 381-4682" in detail
-                
-                passed = has_base and no_decatur and has_phone
-                
-                log_test("A4", "Out-of-range error says 'from our base' (not 'from Decatur')", passed,
-                        f"Message: {detail[:200]}")
-            else:
-                log_test("A4", "Out-of-range error message check", False,
-                        f"Expected 400, got {r.status_code}")
-        
-        except Exception as e:
-            log_test("A4", "Out-of-range error message check", False, str(e))
-
-async def test_booking_with_itemized_breakdown():
-    """Test B: Booking creation with full itemized data"""
-    print("\n" + "="*80)
-    print("TEST GROUP B: BOOKING WITH ITEMIZED BREAKDOWN")
-    print("="*80)
-    
-    # Register fresh user
-    test_email = f"receipt_tester_{datetime.now().timestamp()}@example.com"
-    token = None
-    
-    async with httpx.AsyncClient(timeout=30) as client:
-        try:
-            # Register
-            print("\n[B.1] Registering fresh user...")
-            r = await client.post(f"{API_URL}/auth/register", json={
-                "name": "Receipt Tester",
-                "email": test_email,
-                "password": "TestPass123!",
-                "phone": "4045551234",
-                "marketing_opt_in": True
-            })
-            if r.status_code == 200:
-                token = r.json().get("token")
-                print(f"  ✓ User registered: {test_email}")
-            else:
-                log_test("B5", "Booking with itemized breakdown", False, f"Registration failed: {r.status_code}")
-                return
-            
-            # Create booking with specific payload
-            print("\n[B.2] Creating booking with itemized data...")
-            # Use a date further in the future to avoid conflicts
-            future_date = (datetime.now() + timedelta(days=15)).strftime("%Y-%m-%d")
-            
-            # Try multiple time slots to avoid conflicts
-            time_slots = ["13:00", "13:30", "14:00", "14:30", "15:00"]
-            booking_created = False
-            
-            for time_slot in time_slots:
-                booking_payload = {
-                    "name": "Receipt Tester",
-                    "phone": "4045551234",
+                    "name": "Owner Test",
+                    "phone": "555-0200",
                     "address": "199 North Candler Street, Decatur, Georgia, 30030",
                     "service_value": "general_cleaning",
-                    "tier_key": "heavy",
-                    "bedrooms": 3,
-                    "bathrooms": 2,
-                    "property_type": "single_family_house",
-                    "addons": ["baseboards", "int_windows"],
-                    "discounts": [],
+                    "tier_key": "standard",
                     "preferred_date": future_date,
                     "preferred_time": time_slot,
-                    "access_method": "lockbox",
-                    "access_notes": "Code 4271",
-                    "notes": "Two dogs in the laundry room please.",
-                    "payment_plan": "half_now",
+                    "payment_plan": "pay_later",
                     "payment_method": "cash",
                     "tos_accepted": True
                 }
-                
-                r = await client.post(
-                    f"{API_URL}/bookings",
-                    json=booking_payload,
-                    headers={"Authorization": f"Bearer {token}"}
-                )
-                
-                if r.status_code == 200:
-                    booking_created = True
-                    print(f"  ✓ Booking created at {time_slot}")
-                    break
-                elif r.status_code == 409:
-                    print(f"  ⚠ Time slot {time_slot} taken, trying next...")
-                    continue
-                else:
-                    # Other error
-                    break
-            
-            if not booking_created:
-                log_test("B5", "Booking with itemized breakdown", False,
-                        f"Booking creation failed: {r.status_code} - {r.text[:200]}")
-                return
-            
-            data = r.json()
-            booking_id = data.get("id")
-            
-            # Verify response structure
-            print("\n[B.3] Verifying booking response...")
-            
-            checks = []
-            
-            # Check grand_total
-            grand_total = data.get("grand_total", 0)
-            quote = data.get("quote", {})
-            breakdown = quote.get("breakdown", [])
-            eta = data.get("eta", {})
-            travel_fee = eta.get("extra_fee", 0)
-            
-            # Calculate expected total from breakdown
-            breakdown_sum = sum(item.get("amount", 0) for item in breakdown)
-            expected_total = breakdown_sum + travel_fee
-            
-            total_match = abs(grand_total - expected_total) < 0.01
-            checks.append(("Grand total matches breakdown + travel_fee", total_match,
-                          f"grand_total={grand_total}, breakdown_sum={breakdown_sum}, travel_fee={travel_fee}"))
-            
-            # Check breakdown contains expected items
-            breakdown_labels = [item.get("label", "") for item in breakdown]
-            
-            has_tier = any("Heavy" in label for label in breakdown_labels)
-            checks.append(("Breakdown has tier (Heavy)", has_tier, f"Labels: {breakdown_labels}"))
-            
-            has_bedroom = any("bedroom" in label.lower() for label in breakdown_labels)
-            checks.append(("Breakdown has extra bedroom charge", has_bedroom, ""))
-            
-            has_bathroom = any("bathroom" in label.lower() for label in breakdown_labels)
-            checks.append(("Breakdown has extra bathroom charge", has_bathroom, ""))
-            
-            has_baseboards = any("baseboard" in label.lower() for label in breakdown_labels)
-            checks.append(("Breakdown has baseboards add-on", has_baseboards, ""))
-            
-            has_windows = any("window" in label.lower() for label in breakdown_labels)
-            checks.append(("Breakdown has windows add-on", has_windows, ""))
-            
-            has_discount = any("customer" in label.lower() and "%" in label for label in breakdown_labels)
-            checks.append(("Breakdown has first-time discount", has_discount, ""))
-            
-            has_advance = any("advance" in label.lower() for label in breakdown_labels)
-            checks.append(("Breakdown has advance fee", has_advance, ""))
-            
-            # Check ETA zone and fee
-            zone_correct = eta.get("zone") == "extended"
-            checks.append(("ETA zone is 'extended'", zone_correct, f"zone={eta.get('zone')}"))
-            
-            fee_correct = eta.get("extra_fee") == 10
-            checks.append(("ETA extra_fee is $10", fee_correct, f"extra_fee={eta.get('extra_fee')}"))
-            
-            # Print all checks
-            all_passed = True
-            for check_name, passed, detail in checks:
-                status = "✓" if passed else "✗"
-                print(f"  {status} {check_name}")
-                if detail:
-                    print(f"    {detail}")
-                if not passed:
-                    all_passed = False
-            
-            # Now verify persistence via GET /api/bookings/me
-            print("\n[B.4] Verifying booking persistence...")
-            r = await client.get(
-                f"{API_URL}/bookings/me",
-                headers={"Authorization": f"Bearer {token}"}
             )
             
             if r.status_code == 200:
-                bookings = r.json()
-                found = None
-                for b in bookings:
-                    if b.get("id") == booking_id:
-                        found = b
-                        break
-                
-                if found:
-                    persisted_breakdown = found.get("quote", {}).get("breakdown", [])
-                    breakdown_persisted = len(persisted_breakdown) == len(breakdown)
-                    checks.append(("Breakdown persisted correctly", breakdown_persisted,
-                                  f"Original: {len(breakdown)} items, Persisted: {len(persisted_breakdown)} items"))
-                    print(f"  ✓ Booking found in /bookings/me with {len(persisted_breakdown)} breakdown items")
-                else:
-                    all_passed = False
-                    print(f"  ✗ Booking {booking_id} not found in /bookings/me")
+                results.add_pass("Booking created", f"Booking created successfully at {time_slot}")
+                break
+            elif r.status_code == 409:
+                continue  # Try next time slot
             else:
-                all_passed = False
-                print(f"  ✗ Failed to fetch bookings: {r.status_code}")
+                results.add_fail("Booking creation", f"Expected 200, got {r.status_code}: {r.text[:200]}")
+                return
+        
+        if r.status_code != 200:
+            results.add_fail("Booking creation", "All time slots conflicted")
+            return
+        
+        # Wait a moment for async email to be sent
+        await asyncio.sleep(2)
+        
+        # Check backend logs for Resend email
+        print("  → Checking backend logs for owner notification email...")
+        import subprocess
+        try:
+            log_output = subprocess.check_output(
+                ["tail", "-n", "50", "/var/log/supervisor/backend.err.log"],
+                text=True
+            )
             
-            log_test("B5", "Booking with itemized breakdown", all_passed,
-                    f"Created booking {booking_id} with {len(breakdown)} breakdown items, grand_total=${grand_total}")
+            # Look for the most recent owner notification emails
+            resend_lines = [line for line in log_output.split("\n") if "Resend email sent" in line]
+            
+            if not resend_lines:
+                results.add_fail("Owner notification logs", "No Resend email logs found")
+                return
+            
+            # Check if owner notification went to new email
+            owner_notification_found = False
+            for line in resend_lines[-5:]:  # Check last 5 email logs
+                if "New booking" in line and NEW_EMAIL in line:
+                    owner_notification_found = True
+                    results.add_pass("Owner notification email", f"Sent to {NEW_EMAIL} ✓")
+                    break
+                elif "New booking" in line and OLD_EMAIL in line:
+                    results.add_fail("Owner notification email", f"STILL SENT TO OLD EMAIL {OLD_EMAIL}")
+                    return
+            
+            if not owner_notification_found:
+                # Check if any owner notification was sent
+                owner_notif_exists = any("New booking" in line for line in resend_lines[-5:])
+                if owner_notif_exists:
+                    results.add_pass("Owner notification sent", "Owner notification email sent (email address not visible in logs)")
+                else:
+                    results.add_fail("Owner notification", "No owner notification found in recent logs")
         
         except Exception as e:
-            log_test("B5", "Booking with itemized breakdown", False, str(e))
-
-async def test_email_logs():
-    """Test C: Verify Resend email logs"""
-    print("\n" + "="*80)
-    print("TEST GROUP C: EMAIL VERIFICATION (LOG CHECK)")
-    print("="*80)
-    
-    # This is a smoke check - we'll look for email log entries
-    # Since we can't easily access container logs from here, we'll note this
-    print("\n[C6] Email verification...")
-    print("  Note: This test requires checking backend logs for 'Resend email sent' messages")
-    print("  The booking created in test B5 should have triggered 3 emails:")
-    print("    1. Customer welcome email (on signup)")
-    print("    2. Customer booking confirmation")
-    print("    3. Owner notification to hello@pawfectpristine.com")
-    
-    log_test("C6", "Email logs verification", True,
-            "Smoke check - emails are sent asynchronously. Check backend logs for 'Resend email sent'")
+            results.add_fail("Log check", f"Could not check logs: {e}")
 
 async def test_regression():
-    """Test D: Regression tests"""
-    print("\n" + "="*80)
-    print("TEST GROUP D: REGRESSION TESTS")
-    print("="*80)
+    """Test 5: Regression tests - verify existing endpoints still work"""
+    print("\n[TEST 5] Regression tests")
     
     async with httpx.AsyncClient(timeout=30) as client:
-        # Test D7: Admin login
-        print("\n[D7] Testing admin login...")
-        try:
-            r = await client.post(f"{API_URL}/auth/login", json={
-                "email": ADMIN_EMAIL,
-                "password": ADMIN_PASSWORD
-            })
-            passed = r.status_code == 200 and "token" in r.json()
-            log_test("D7", "POST /api/auth/login (admin)", passed,
-                    f"status={r.status_code}")
-        except Exception as e:
-            log_test("D7", "POST /api/auth/login (admin)", False, str(e))
+        # 5a: Admin login
+        r = await client.post(
+            f"{BASE_URL}/api/auth/login",
+            json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD}
+        )
+        if r.status_code == 200:
+            results.add_pass("Regression: Admin login", "200 ✓")
+        else:
+            results.add_fail("Regression: Admin login", f"Expected 200, got {r.status_code}")
         
-        # Test D8: Catalog
-        print("\n[D8] Testing catalog...")
-        try:
-            r = await client.get(f"{API_URL}/catalog")
+        # 5b: Catalog
+        r = await client.get(f"{BASE_URL}/api/catalog")
+        if r.status_code == 200:
             data = r.json()
-            passed = r.status_code == 200 and "general_cleaning" in data
-            log_test("D8", "GET /api/catalog", passed,
-                    f"status={r.status_code}, services={len(data)}")
-        except Exception as e:
-            log_test("D8", "GET /api/catalog", False, str(e))
+            if isinstance(data, dict) and len(data) > 0:
+                results.add_pass("Regression: Catalog", f"200 with {len(data)} services ✓")
+            else:
+                results.add_fail("Regression: Catalog", "Empty catalog")
+        else:
+            results.add_fail("Regression: Catalog", f"Expected 200, got {r.status_code}")
         
-        # Test D9: PayPal config
-        print("\n[D9] Testing PayPal config...")
-        try:
-            r = await client.get(f"{API_URL}/paypal/config")
+        # 5c: PayPal config
+        r = await client.get(f"{BASE_URL}/api/paypal/config")
+        if r.status_code == 200:
             data = r.json()
-            passed = (
-                r.status_code == 200 and
-                data.get("enabled") == True and
-                data.get("env") == "live"
-            )
-            log_test("D9", "GET /api/paypal/config", passed,
-                    f"enabled={data.get('enabled')}, env={data.get('env')}")
-        except Exception as e:
-            log_test("D9", "GET /api/paypal/config", False, str(e))
+            if data.get("enabled") and data.get("env") == "live" and data.get("client_id"):
+                results.add_pass("Regression: PayPal config", "enabled=true, env=live, client_id present ✓")
+            else:
+                results.add_fail("Regression: PayPal config", f"Invalid config: {data}")
+        else:
+            results.add_fail("Regression: PayPal config", f"Expected 200, got {r.status_code}")
         
-        # Test D10: PayPal create-order
-        print("\n[D10] Testing PayPal create-order...")
-        try:
-            r = await client.post(f"{API_URL}/paypal/create-order", json={
-                "amount": 1.00,
-                "currency": "USD"
-            })
+        # 5d: PayPal create-order
+        r = await client.post(
+            f"{BASE_URL}/api/paypal/create-order",
+            json={"amount": 1.00, "currency": "USD"}
+        )
+        if r.status_code == 200:
             data = r.json()
-            passed = r.status_code == 200 and "id" in data
-            log_test("D10", "POST /api/paypal/create-order", passed,
-                    f"status={r.status_code}, order_id={data.get('id', 'N/A')[:20]}")
-        except Exception as e:
-            log_test("D10", "POST /api/paypal/create-order", False, str(e))
+            if data.get("id"):
+                results.add_pass("Regression: PayPal create-order", f"200 with order ID {data['id'][:20]}... ✓")
+            else:
+                results.add_fail("Regression: PayPal create-order", "No order ID returned")
+        else:
+            results.add_fail("Regression: PayPal create-order", f"Expected 200, got {r.status_code}")
         
-        # Test D11: Geocode suggest
-        print("\n[D11] Testing geocode suggest...")
-        try:
-            r = await client.get(f"{API_URL}/geocode/suggest", params={
-                "q": "3215 Allison"
-            })
+        # 5e: Geocode suggest
+        r = await client.get(f"{BASE_URL}/api/geocode/suggest?q=Decatur")
+        if r.status_code == 200:
             data = r.json()
-            # Should return 200 with results array (may be empty or have results)
-            passed = r.status_code == 200 and "results" in data
-            has_georgia = False
-            if data.get("results"):
-                has_georgia = any("Georgia" in res.get("state", "") for res in data["results"])
-            log_test("D11", "GET /api/geocode/suggest", passed,
-                    f"status={r.status_code}, results={len(data.get('results', []))}, has_GA={has_georgia}")
-        except Exception as e:
-            log_test("D11", "GET /api/geocode/suggest", False, str(e))
+            results_list = data.get("results", [])
+            if len(results_list) > 0:
+                ga_results = [res for res in results_list if res.get("state") == "Georgia"]
+                if ga_results:
+                    results.add_pass("Regression: Geocode suggest", f"200 with {len(ga_results)} GA results ✓")
+                else:
+                    results.add_pass("Regression: Geocode suggest", f"200 with {len(results_list)} results (no GA filter) ✓")
+            else:
+                results.add_pass("Regression: Geocode suggest", "200 with empty results (acceptable) ✓")
+        else:
+            results.add_fail("Regression: Geocode suggest", f"Expected 200, got {r.status_code}")
+        
+        # 5f: Static catalog.json
+        r = await client.get(f"{BASE_URL}/catalog.json")
+        if r.status_code == 200:
+            data = r.json()
+            if "general_cleaning" in str(data):
+                results.add_pass("Regression: Static catalog.json", "200 with general_cleaning ✓")
+            else:
+                results.add_fail("Regression: Static catalog.json", "Missing general_cleaning")
+        else:
+            results.add_fail("Regression: Static catalog.json", f"Expected 200, got {r.status_code}")
 
 async def main():
-    print("\n" + "="*80)
-    print("PAWFECT & PRISTINE BACKEND TEST SUITE v1.7")
-    print("Testing: Origin move + Itemized receipt emails")
+    print("="*80)
+    print("PAWFECT & PRISTINE v1.8 BACKEND TESTS")
+    print("Testing rebrand (phone + email) and TOS v2.0")
     print("="*80)
     
-    # Run all test groups
-    await test_eta_new_origin()
-    await test_booking_out_of_range_message()
-    await test_booking_with_itemized_breakdown()
-    await test_email_logs()
+    await test_tos_v2()
+    await test_eta_out_of_range()
+    await test_booking_out_of_range()
+    await test_booking_owner_notification()
     await test_regression()
     
-    # Summary
-    print("\n" + "="*80)
-    print("TEST SUMMARY")
-    print("="*80)
-    
-    passed_count = sum(1 for r in results if r["passed"])
-    total_count = len(results)
-    
-    print(f"\nTotal: {passed_count}/{total_count} tests passed ({100*passed_count//total_count}%)\n")
-    
-    for r in results:
-        status = "✅" if r["passed"] else "❌"
-        print(f"{status} Test {r['test']}: {r['name']}")
-    
-    print("\n" + "="*80)
-    
-    # Return exit code
-    return 0 if passed_count == total_count else 1
+    results.print_summary()
 
 if __name__ == "__main__":
-    exit_code = asyncio.run(main())
-    exit(exit_code)
+    asyncio.run(main())

@@ -376,8 +376,8 @@ function Footer() {
         <div>
           <h4 className="text-[12px] font-semibold uppercase tracking-[0.12em] text-[#7aaa90]">Contact</h4>
           <ul className="mt-4 space-y-2.5 text-[13px] text-[#6b8878]">
-            <li><a href="tel:+14703814682" className="flex items-center gap-2 hover:text-[var(--green-pale)] transition-colors"><Phone size={14} /> (470) 381-4682</a></li>
-            <li><a href="mailto:hello@pawfectpristine.com" className="flex items-center gap-2 hover:text-[var(--green-pale)] transition-colors"><Mail size={14} /> hello@pawfectpristine.com</a></li>
+            <li><a href="tel:+14047503446" className="flex items-center gap-2 hover:text-[var(--green-pale)] transition-colors"><Phone size={14} /> (404) 750-3446</a></li>
+            <li><a href="mailto:itzmekhii@gmail.com" className="flex items-center gap-2 hover:text-[var(--green-pale)] transition-colors"><Mail size={14} /> itzmekhii@gmail.com</a></li>
             <li className="flex items-center gap-2"><MapPin size={14} /> Decatur · East Atlanta</li>
             <li><Link to="/book" className="flex items-center gap-2 hover:text-[var(--green-pale)] transition-colors"><Calendar size={14} /> Book a Visit</Link></li>
             <li><Link to="/tos" className="flex items-center gap-2 hover:text-[var(--green-pale)] transition-colors" data-testid="footer-tos">Terms of Service</Link></li>

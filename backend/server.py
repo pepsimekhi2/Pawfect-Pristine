@@ -30,7 +30,7 @@ mongo_url = os.environ['MONGO_URL']
 mongo_client = AsyncIOMotorClient(mongo_url)
 db = mongo_client[os.environ['DB_NAME']]
 
-OWNER_EMAIL = os.environ.get('OWNER_EMAIL', 'hello@pawfectpristine.com')
+OWNER_EMAIL = os.environ.get('OWNER_EMAIL', 'itzmekhii@gmail.com')
 ORIGIN_LAT = float(os.environ.get('ORIGIN_LAT', '33.6712656'))
 ORIGIN_LON = float(os.environ.get('ORIGIN_LON', '-84.2528801'))
 ORIGIN_LABEL = os.environ.get('ORIGIN_LABEL', '3215 Allison Circle, Panthersville, GA 30034')
@@ -333,7 +333,7 @@ def classify_zone(miles: float) -> dict:
         return {"zone": "extended", "extra_fee": 10, "zone_label": "Extended Service Area",
                 "zone_message": "We can swing by — a small $10 travel fee applies."}
     return {"zone": "out_of_range", "extra_fee": 0, "zone_label": "Out of Range",
-            "zone_message": "You're a bit far for our regular routes. Call us at (470) 381-4682 for a custom quote!"}
+            "zone_message": "You're a bit far for our regular routes. Call us at (404) 750-3446 for a custom quote!"}
 
 
 def format_arrival(duration_minutes: float):
@@ -525,7 +525,7 @@ def booking_confirmation_html(booking: dict) -> str:
       <!-- Footer -->
       <div style="background:#fff;border:1px solid #e6efe9;border-top:0;border-radius:0 0 12px 12px;padding:22px 28px 26px">
         <div style="font-size:13px;color:#5f6f67;margin-bottom:10px">Need to make changes? Manage this booking from your <a href="https://www.pawfectpristine.xyz/dashboard" style="color:#3d7a5c;font-weight:600;text-decoration:none">dashboard</a> or just reply to this email.</div>
-        <div style="font-size:12px;color:#8a9890;margin-top:14px">— Mekhi &amp; the Pawfect &amp; Pristine team · <a href="tel:+14703814682" style="color:#5f6f67;text-decoration:none">(470) 381-4682</a> · <a href="mailto:hello@pawfectpristine.com" style="color:#5f6f67;text-decoration:none">hello@pawfectpristine.com</a></div>
+        <div style="font-size:12px;color:#8a9890;margin-top:14px">— Mekhi &amp; the Pawfect &amp; Pristine team · <a href="tel:+14047503446" style="color:#5f6f67;text-decoration:none">(404) 750-3446</a> · <a href="mailto:itzmekhii@gmail.com" style="color:#5f6f67;text-decoration:none">itzmekhii@gmail.com</a></div>
       </div>
     </div>
     """
@@ -899,7 +899,7 @@ async def create_booking(payload: BookingCreate, user: dict = Depends(get_curren
     if z["zone"] == "out_of_range":
         raise HTTPException(
             status_code=400,
-            detail=f"Sorry — {addr_clean} is {miles} mi from our base, outside our service area. Call (470) 381-4682 for a custom quote.",
+            detail=f"Sorry — {addr_clean} is {miles} mi from our base, outside our service area. Call (404) 750-3446 for a custom quote.",
         )
     eta_dict = {"distance_miles": miles, "duration_minutes": mins,
                 "zone": z["zone"], "extra_fee": z["extra_fee"]}

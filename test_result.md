@@ -276,13 +276,13 @@ frontend:
 
 metadata:
   created_by: "main_agent"
-  version: "1.7"
-  test_sequence: 6
+  version: "1.8"
+  test_sequence: 7
   run_ui: false
 
 test_plan:
   current_focus:
-    - "Origin move + itemized receipt emails - all 11 tests passed"
+    - "v1.8 rebrand + TOS v2.0 - all 21 tests passed"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
@@ -519,7 +519,125 @@ agent_communication:
             
             CONCLUSION: Both user-reported bugs are FIXED. Services now always display (via fallback), and step 1 is no longer overloaded (upsells moved to new step 2).
 
-  - task: "Move origin to 3215 Allison Circle + itemized receipt-style booking emails"
+  - task: "v1.8 — Phone + email rebrand, refund + safety TOS, slimmer payment step"
+    implemented: true
+    working: true
+    file: "backend/server.py, backend/tos.py, backend/.env, frontend/src/App.js, frontend/src/pages/BookPage.jsx, frontend/src/components/PaymentGuidelines.jsx, frontend/src/components/HelpBanner.jsx, frontend/src/components/EtaCalculator.jsx, frontend/src/index.css"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            v1.8 — User-requested changes:
+            1. Phone number: (470) 381-4682 → (404) 750-3446 EVERYWHERE
+               (server.py zone msg + email footer + out-of-range error, tos.py,
+                App.js footer, EtaCalculator, HelpBanner default prop, PaymentGuidelines).
+            2. Support email: hello@pawfectpristine.com → itzmekhii@gmail.com
+               (OWNER_EMAIL env + default, server.py email footer, tos.py, App.js footer).
+            3. TOS rewritten to v2.0, effective 2026-07-15:
+               - Section 5 REFUND POLICY: refunds limited to MAX 65% (processor cut explanation),
+                 24h cancellation = no refund, on-site = no refund.
+               - Section 7 SAFETY & RESPECT — TECHNICIAN'S RIGHT TO LEAVE:
+                 explicit list of behaviors that end a job no-refund (verbal abuse,
+                 harassment, slurs, sexual advances, weapons, intoxication, aggressive
+                 pets owner won't intervene on, undisclosed hazards, scope creep).
+                 Tech's judgment is final, police if escalation.
+               - Section 6 CHARGEBACKS reported to PayPal + bank + LAW ENFORCEMENT
+                 (replaced the "DeKalb County small-claims court" line).
+               - Contact updated.
+            4. PaymentGuidelines rewritten as a compact card (no more huge $XX callout +
+               5 ShieldAlert rules). Shows: "Charging now $XX" + plan chip + 2 bullet rules
+               (refund 65%, chargebacks=fraud), with a "See more rules" toggle that reveals
+               the technician-leave + on-spot-fix bullets. Single checkbox.
+            5. Step 5 in BookPage slimmed: tighter plan card copy ("Half now, half on
+               arrival" instead of "Pay half now via PayPal · Reserve your spot…"),
+               removed the redundant "Step 1 · Pay $XX in PayPal" hint above PayPalPayment.
+            6. Static /catalog.json snapshot refreshed so the Vercel deploy's offline
+               fallback reflects current pricing.
+            
+            Backend smoke-tested: GET /api/tos returns version=2.0 effective=2026-07-15
+            with the new contact line "(404) 750-3446 · itzmekhii@gmail.com". Out-of-range
+            zone_message now references the new phone.
+        - working: true
+          agent: "testing"
+          comment: |
+            ✅ ALL v1.8 BACKEND TESTS PASSED (21/21 = 100%)
+            
+            PRIORITY TESTS — Phone/Email Rebrand + TOS v2.0:
+            
+            TEST 1 — GET /api/tos (9/9 assertions passed):
+            ✅ version = "2.0" (NOT "1.0")
+            ✅ effective = "2026-07-15" (NOT "2026-06-16")
+            ✅ text contains "(404) 750-3446" (new phone)
+            ✅ text contains "itzmekhii@gmail.com" (new support email)
+            ✅ text contains "65%" (refund cap)
+            ✅ text contains "TECHNICIAN'S RIGHT TO LEAVE" (section 7 heading)
+            ✅ text does NOT contain "(470) 381-4682" (old phone removed)
+            ✅ text does NOT contain "hello@pawfectpristine" (old email removed)
+            ✅ text does NOT contain "small-claims" or "small claims" (clause removed)
+            
+            TEST 2 — POST /api/eta with out-of-range address (2/2 passed):
+            ✅ zone_message contains "(404) 750-3446" (new phone)
+            ✅ zone_message does NOT contain "(470) 381-4682" (old phone)
+            
+            TEST 3 — POST /api/bookings with out-of-range address (2/2 passed):
+            ✅ Returns 400 with detail containing "(404) 750-3446" (new phone)
+            ✅ detail does NOT contain "(470) 381-4682" (old phone)
+            
+            TEST 4 — POST /api/bookings with valid in-area address (2/2 passed):
+            ✅ Booking created successfully (200 OK)
+            ✅ Backend logs confirm owner notification sent to "itzmekhii@gmail.com" (NOT "hello@pawfectpristine.com")
+            
+            REGRESSION TESTS (6/6 passed):
+            ✅ POST /api/auth/login (admin) → 200
+            ✅ GET /api/catalog → 200 with 7 services
+            ✅ GET /api/paypal/config → 200 (enabled=true, env=live, client_id present)
+            ✅ POST /api/paypal/create-order → 200 with real PayPal order ID
+            ✅ GET /api/geocode/suggest?q=Decatur → 200 with 1 GA result
+            ✅ GET /catalog.json (static fallback) → 200 with "general_cleaning"
+            
+            CONCLUSION: v1.8 backend rebrand is COMPLETE and VERIFIED. All phone numbers updated to (404) 750-3446, 
+            all support emails updated to itzmekhii@gmail.com, TOS v2.0 with 65% refund cap and TECHNICIAN'S RIGHT 
+            TO LEAVE section is live. All regression tests passed. Backend is production-ready.
+
+    - agent: "main"
+      message: |
+        v1.8 to test — phone/email rebrand + TOS v2.0 + slimmer payment step.
+        
+        Please verify (backend only — frontend will be tested separately on user
+        approval):
+        
+        1. GET /api/tos returns:
+           - `version` == "2.0"
+           - `effective` == "2026-07-15"
+           - `text` contains "(404) 750-3446"
+           - `text` contains "itzmekhii@gmail.com"
+           - `text` contains "65%" (refund cap)
+           - `text` contains "TECHNICIAN'S RIGHT TO LEAVE" (section 7)
+           - `text` does NOT contain "small-claims" (old clause removed)
+           - `text` does NOT contain "(470) 381-4682" (old phone removed)
+           - `text` does NOT contain "hello@pawfectpristine" (old email removed)
+        
+        2. POST /api/eta with an out-of-range address (e.g. "Times Square, NY") returns
+           a 200 response with `zone_message` containing "(404) 750-3446" (NOT 470 …).
+        
+        3. POST /api/bookings (authed) with an out-of-range address returns 400 with
+           `detail` containing "(404) 750-3446" (NOT 470 …).
+        
+        4. POST /api/bookings (authed) with a valid in-area address completes a 200
+           and triggers a booking confirmation email to the customer + an owner
+           notification to itzmekhii@gmail.com (check backend logs for Resend POSTs;
+           verify the owner-notification was sent to itzmekhii@gmail.com, not the
+           old hello@pawfectpristine.com address).
+        
+        5. REGRESSION quick:
+           - POST /api/auth/login admin → 200
+           - GET /api/catalog → 200
+           - GET /api/paypal/config → 200
+           - GET /api/geocode/suggest?q=Decatur → 200, at least 1 result
+           - GET /catalog.json (static fallback at root) → 200 JSON
     implemented: true
     working: true
     file: "backend/server.py, backend/.env"
@@ -1065,3 +1183,51 @@ agent_communication:
         ✅ Admin login, catalog, PayPal config, PayPal create-order, geocode suggest
         
         All changes working correctly. Ready for production.
+
+
+    - agent: "testing"
+      message: |
+        ✅ v1.8 BACKEND TESTING COMPLETE - ALL 21 TESTS PASSED (100%)
+        
+        Tested v1.8 rebrand (phone + email) and TOS v2.0 updates per review request.
+        Base URL: https://48511398-4d7d-4642-be1e-d796c8f83659.preview.emergentagent.com
+        
+        PRIORITY TESTS — Phone/Email Rebrand + TOS v2.0 (15/15 passed):
+        
+        ✅ TEST 1 — GET /api/tos (9 assertions):
+           • version = "2.0" ✓
+           • effective = "2026-07-15" ✓
+           • text contains "(404) 750-3446" (new phone) ✓
+           • text contains "itzmekhii@gmail.com" (new support email) ✓
+           • text contains "65%" (refund cap) ✓
+           • text contains "TECHNICIAN'S RIGHT TO LEAVE" (section 7) ✓
+           • text does NOT contain "(470) 381-4682" (old phone removed) ✓
+           • text does NOT contain "hello@pawfectpristine" (old email removed) ✓
+           • text does NOT contain "small-claims" (clause removed) ✓
+        
+        ✅ TEST 2 — POST /api/eta with out-of-range address:
+           • zone_message contains "(404) 750-3446" ✓
+           • zone_message does NOT contain "(470) 381-4682" ✓
+        
+        ✅ TEST 3 — POST /api/bookings with out-of-range address:
+           • Returns 400 with detail containing "(404) 750-3446" ✓
+           • detail does NOT contain "(470) 381-4682" ✓
+        
+        ✅ TEST 4 — POST /api/bookings with valid in-area address:
+           • Booking created successfully (200 OK) ✓
+           • Backend logs confirm owner notification sent to "itzmekhii@gmail.com" ✓
+           • Owner notification NOT sent to old "hello@pawfectpristine.com" ✓
+        
+        REGRESSION TESTS (6/6 passed):
+        ✅ POST /api/auth/login (admin) → 200
+        ✅ GET /api/catalog → 200 with 7 services
+        ✅ GET /api/paypal/config → 200 (enabled=true, env=live, client_id present)
+        ✅ POST /api/paypal/create-order → 200 with real PayPal order ID
+        ✅ GET /api/geocode/suggest?q=Decatur → 200 with 1 GA result
+        ✅ GET /catalog.json (static fallback) → 200 with "general_cleaning"
+        
+        📊 CONCLUSION:
+        v1.8 backend rebrand is COMPLETE and VERIFIED. All phone numbers updated to (404) 750-3446, 
+        all support emails updated to itzmekhii@gmail.com, TOS v2.0 with 65% refund cap and 
+        TECHNICIAN'S RIGHT TO LEAVE section is live. All regression tests passed. Backend is 
+        production-ready.

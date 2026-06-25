@@ -108,8 +108,8 @@ export default function EtaCalculator() {
                       <span className="tag tag-pet" data-testid="eta-fee">+${result.extra_fee} travel fee</span>
                     )}
                     {result.zone === "out_of_range" && (
-                      <a href="tel:+14703814682" data-testid="eta-call" className="btn-primary" style={{ padding: "10px 22px", fontSize: 13 }}>
-                        <Phone size={14} /> Call (470) 381-4682
+                      <a href="tel:+14047503446" data-testid="eta-call" className="btn-primary" style={{ padding: "10px 22px", fontSize: 13 }}>
+                        <Phone size={14} /> Call (404) 750-3446
                       </a>
                     )}
                   </div>

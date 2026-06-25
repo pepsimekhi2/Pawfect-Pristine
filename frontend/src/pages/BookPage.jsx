@@ -475,13 +475,13 @@ export default function BookPage() {
             {step === 5 && (
               <motion.div key="s5" {...fade} className="space-y-5">
                 <FieldLabel>How would you like to pay?</FieldLabel>
-                <div className="grid gap-3" data-testid="payment-plans">
+                <div className="grid gap-2.5" data-testid="payment-plans">
                   <PlanCard
                     selected={paymentPlan === "pay_later"}
                     onClick={() => setPaymentPlan("pay_later")}
                     testid="plan-pay_later"
                     title="Pay on arrival"
-                    desc="No charge today. Pay cash when we arrive."
+                    desc="Cash when we get there."
                     amount={`$0 now · $${grandTotal} on arrival`}
                     icon="⏰"
                   />
@@ -489,8 +489,8 @@ export default function BookPage() {
                     selected={paymentPlan === "half_now"}
                     onClick={() => setPaymentPlan("half_now")}
                     testid="plan-half_now"
-                    title="Pay half now via PayPal"
-                    desc="Reserve your spot with half. The rest is due in cash on arrival."
+                    title="Half now, half on arrival"
+                    desc="Lock your slot with a 50% deposit."
                     amount={`$${Math.round((grandTotal/2)*100)/100} now · $${Math.round((grandTotal/2)*100)/100} on arrival`}
                     icon="⚖️"
                   />
@@ -498,19 +498,18 @@ export default function BookPage() {
                     selected={paymentPlan === "all_now"}
                     onClick={() => setPaymentPlan("all_now")}
                     testid="plan-all_now"
-                    title="Pay in full now via PayPal"
-                    desc="Get it out of the way. We'll just show up and do the work."
+                    title="Pay in full now"
+                    desc="Done. We just show up and work."
                     amount={`$${grandTotal} now · $0 on arrival`}
                     icon="✨"
                   />
                 </div>
 
                 {paymentPlan !== "pay_later" && (
-                  <div className="mt-2" data-testid="paypal-section">
-                    <div className="h-px bg-[var(--border)] my-2" />
+                  <div className="pp-pay-wrap" data-testid="paypal-section">
                     <PaymentGuidelines
                       amount={dueNow}
-                      planLabel={paymentPlan === "all_now" ? "Paying in full now" : "Paying half now · rest on arrival"}
+                      planLabel={paymentPlan === "all_now" ? "in full" : "50% deposit"}
                       accepted={guidelinesAccepted}
                       onChange={setGuidelinesAccepted}
                     />
@@ -520,12 +519,9 @@ export default function BookPage() {
                         initial={{ opacity: 0, y: 8 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.3 }}
-                        className="mt-5"
+                        className="mt-4"
                         data-testid="paypal-active"
                       >
-                        <div className="text-[11px] uppercase tracking-[0.14em] font-semibold text-[var(--text-muted)] mb-3">
-                          Pay ${dueNow} — card or PayPal, processed instantly
-                        </div>
                         <PayPalPayment
                           amount={dueNow}
                           bookingRef={`${user?.id || "guest"}-${Date.now()}`}

@@ -1347,3 +1347,95 @@ textarea.pp-input { min-height: 100px; resize: vertical; font-family: inherit; }
 .addr-zone-standard { color: var(--green); border-color: var(--green-pale); background: var(--green-light); }
 .addr-zone-extended { color: var(--warn-text); border-color: var(--warn-border); background: var(--warn-bg); }
 .addr-zone-out_of_range { color: #c0392b; border-color: #f5b7b1; background: #fdecea; }
+
+
+/* ============= Compact payment guidelines (v2) ============= */
+.payment-guidelines-compact {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 18px 20px;
+  margin-top: 14px;
+}
+.pg-amount-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 14px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+.pg-amount-label {
+  font-size: 10.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+.pg-amount-value {
+  font-family: Georgia, serif;
+  font-size: 28px;
+  color: var(--green-dark);
+  line-height: 1;
+  margin-top: 4px;
+  font-variant-numeric: tabular-nums;
+}
+.pg-plan-chip {
+  display: inline-block;
+  padding: 6px 12px;
+  background: var(--green-light);
+  color: var(--green-dark);
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  white-space: nowrap;
+}
+.pg-rule-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pg-rule-list li {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text);
+  padding-left: 14px;
+  position: relative;
+}
+.pg-rule-list li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 9px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--green);
+}
+.pg-more-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  padding: 4px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--green-dark);
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.pg-more-btn:hover { background: var(--green-light); }
+.pg-checkbox {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.pp-pay-wrap { margin-top: 8px; }
