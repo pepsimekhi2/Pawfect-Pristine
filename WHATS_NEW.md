@@ -1,44 +1,53 @@
-# Pawfect & Pristine — What's New
+# Pawfect & Pristine — v1.6 release notes
 
-## Customer accounts + dashboard
-- **Sign up / Sign in** at `/signup` and `/login` (email + password, JWT, bcrypt).
-  Try it: top-right "Sign in" button in the header.
-- **Dashboard** at `/dashboard` (protected):
-  - Month calendar with green dots on days that have scheduled visits.
-  - "Next visit" callout card.
-  - Upcoming list with **Scheduled** / **Cancelled** status pills and **Paid in full** / **Half paid** / **Pay on arrival** payment pills.
-  - One-click **cancel** per booking.
-  - "Schedule a new visit" CTA.
+## 💳 On-site card payments (real money, no redirect)
+Replaced the old "open PayPal in a new tab" hosted button with **on-site card processing** using PayPal's Orders v2 API.
 
-## Refactored booking flow
-5 quick steps at `/book`:
-1. **Service + tier** — pick Home or Pet, then service, then your messiness/size tier (with per-tier prices that update live).
-2. **Date + time** — custom calendar + 30-minute time slots. **+$0.99 advance fee** badge appears automatically when ≥7 days out.
-3. **Your details** — name, phone, address. Real driving distance + travel-fee preview (Google Maps Distance Matrix).
-4. **Payment** — choose:
-   - Plan: **Pay on arrival** · **Pay half now** · **Pay in full now**.
-   - Method: **Tap-to-pay / card** · **Cash on arrival** (cash only with "pay on arrival" plan).
-   - "Pay now" by card uses a **mock card form** (Stripe coming later — no real charge).
-5. **Review + TOS** — line-by-line breakdown, TOS checkbox, confirm.
+- Customer enters card number / expiry / CVV / postal **inside PayPal's secure card-fields iframes** on our checkout page (no PCI burden on us, no leaving the site).
+- PayPal & Venmo wallet buttons rendered alongside the card form.
+- New backend endpoints:
+  - `GET /api/paypal/config` — returns client_id + env for the frontend SDK loader.
+  - `POST /api/paypal/create-order` — creates a PayPal order with the booking amount.
+  - `POST /api/paypal/capture-order` — captures the payment and returns confirmation.
+- Booking now stores `paypal_order_id`, `paypal_capture_id`, `paypal_captured_amount`.
+- `payment_status` is set to **`paid_full`** / **`paid_half`** automatically on capture — no more "pending verification" for card payments.
 
-## Terms of Service
-- Page at `/tos` linked from the footer + booking form.
-- Backend endpoint `GET /api/tos` returns `{ version, effective, text }`.
-- Covers: scheduling, pricing & advance fee, payment, cancellation (free >24hr, 50% within 24hr, 100% no-show), key handling, pet care/liability, photos, liability cap.
+## 📧 Transactional emails (Resend)
+- `RESEND_API_KEY` wired into `backend/.env` (verified domain `pawfectpristine.xyz`, from `bookings@pawfectpristine.xyz`).
+- **Signup welcome email** — branded 25%-off first-booking offer.
+- **Booking confirmation email** — sent to the customer with full recap, total, paid amount, and a "back to dashboard" link.
+- **Owner notification** — every booking emails `hello@pawfectpristine.com` with customer/contact/payment/PayPal-order-id, with the customer's email set as the reply-to.
 
-## Firebase Realtime Database mirror
-- Your DB URL is wired up: `https://mekhis-creations-default-rtdb.firebaseio.com/`
-- The FastAPI backend now **dual-writes** each new user + booking to your RTDB via REST.
-- **Action you need to take:** open `/app/FIREBASE_RULES.md`, copy the rules JSON, and paste it into your Firebase console:
-  - Firebase Console → your project → Realtime Database → Rules → Publish.
-  - Until you do this, writes return `401 Unauthorized` (the backend silently skips them — MongoDB is the source of truth so the app still works perfectly).
-- After you publish the rules, you'll see live data in Firebase Console under `/users`, `/bookings`, `/user_bookings/{uid}`.
+## 📱 Mobile cleanup
+- Killed horizontal scroll on small screens.
+- Hero, section headings, plan cards, calendar tap targets all retuned for ≤ 640 px.
+- iOS Safari no longer zooms in on input focus (`pp-input` font-size locked to 16 px on mobile).
+- Sticky CTA bar in booking flow nav.
+- iOS safe-area bottom padding.
 
-## Test credentials
-- Admin: `admin@pawfectpristine.com` / `Pawfect2026!`
-- Sample customer (created during e2e test): `t1@example.com` / `Customer123!`
-- Or just register a new account at `/signup`.
+## 🚮 Removed
+- **Twilio integration** removed entirely. The "I'm on the way" admin button still works — it now hands the device a `sms:` deeplink that opens the native Messages app pre-filled (zero cost).
+- **PayPal Hosted Button** component removed.
 
-## Notes
-- Stripe / real "Pay NOW" tap-to-pay is **MOCKED** for now — when you're ready, give me your Stripe publishable + secret keys and I'll wire in real Apple Pay / Google Pay / cards.
-- Firebase admin SDK is **not** used because you didn't share a service-account credential. Once you do, I can switch to authenticated writes and stricter per-user rules (template is in `FIREBASE_RULES.md`).
+## 🛠 Make-it-runnable
+- `backend/.env` + `frontend/.env` are now part of the repo (Mongo URL, admin seed, PayPal creds, Resend key, geocoder origin, JWT secret).
+- `requirements.txt` cleaned of `twilio`.
+- Restored real **DashboardPage** (was accidentally clobbered by a copy of BookPage in a prior commit).
+
+## ✅ Tested
+14 / 14 backend tests passed (PayPal Orders v2 against live API, payment_status logic for paid_full / paid_half / pending_verify / unpaid, plus regression on auth / catalog / quote / eta / tos / bookings / firebase).
+
+## ⚙️ Config reference
+```env
+# backend/.env
+RESEND_API_KEY=re_…
+RESEND_FROM=Pawfect & Pristine <bookings@pawfectpristine.xyz>
+OWNER_EMAIL=hello@pawfectpristine.com
+PAYPAL_ENV=live
+PAYPAL_CLIENT_ID=BAA…
+PAYPAL_CLIENT_SECRET=ED5…
+
+# frontend/.env
+REACT_APP_BACKEND_URL=https://…
+REACT_APP_PAYPAL_CLIENT_ID=BAA…
+```
