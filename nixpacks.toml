@@ -1,0 +1,17 @@
+# Nixpacks build config — used by Railway when railway.json's builder is NIXPACKS.
+# Forces Python 3.11 and installs requirements.txt at the repo root.
+
+[phases.setup]
+nixPkgs = ['python311', 'gcc']
+
+[phases.install]
+cmds = ['python -m venv /opt/venv', '. /opt/venv/bin/activate && pip install --no-cache-dir -r requirements.txt']
+
+[phases.build]
+cmds = ['echo "no build step needed"']
+
+[start]
+cmd = 'uvicorn server:app --app-dir backend --host 0.0.0.0 --port $PORT'
+
+[variables]
+PYTHONUNBUFFERED = '1'
