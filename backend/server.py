@@ -31,9 +31,9 @@ mongo_client = AsyncIOMotorClient(mongo_url)
 db = mongo_client[os.environ['DB_NAME']]
 
 OWNER_EMAIL = os.environ.get('OWNER_EMAIL', 'hello@pawfectpristine.com')
-ORIGIN_LAT = float(os.environ.get('ORIGIN_LAT', '33.7748'))
-ORIGIN_LON = float(os.environ.get('ORIGIN_LON', '-84.2963'))
-ORIGIN_LABEL = os.environ.get('ORIGIN_LABEL', 'Decatur, GA')
+ORIGIN_LAT = float(os.environ.get('ORIGIN_LAT', '33.6712656'))
+ORIGIN_LON = float(os.environ.get('ORIGIN_LON', '-84.2528801'))
+ORIGIN_LABEL = os.environ.get('ORIGIN_LABEL', '3215 Allison Circle, Panthersville, GA 30034')
 ADMIN_EMAIL = os.environ.get('ADMIN_EMAIL')
 ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD')
 ADMIN_PASSPHRASE = os.environ.get('ADMIN_PASSPHRASE', 'duck')
@@ -390,6 +390,31 @@ def welcome_offer_html(name: str) -> str:
     """
 
 
+def _fmt_money(v) -> str:
+    try:
+        return f"${float(v):,.2f}"
+    except Exception:
+        return f"${v}"
+
+
+def _line_row(label: str, amount, is_discount: bool = False) -> str:
+    safe_label = html.escape(str(label))
+    try:
+        amt = float(amount)
+    except Exception:
+        amt = 0.0
+    is_disc = is_discount or amt < 0
+    color = "#3d7a5c" if is_disc else "#1f2a24"
+    sign = "−" if is_disc else ""
+    val = _fmt_money(abs(amt))
+    return f"""
+      <tr>
+        <td style="padding:8px 0;font-size:13.5px;color:#1f2a24">{safe_label}</td>
+        <td style="padding:8px 0;font-size:13.5px;color:{color};text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums">{sign}{val}</td>
+      </tr>
+    """
+
+
 def booking_confirmation_html(booking: dict) -> str:
     name = html.escape(booking.get("name", "there"))
     svc = html.escape(booking.get("service_label", "your service"))
@@ -397,34 +422,110 @@ def booking_confirmation_html(booking: dict) -> str:
     when_date = html.escape(booking.get("preferred_date") or "")
     when_time = html.escape(booking.get("preferred_time") or "")
     addr = html.escape(booking.get("address", ""))
-    total = booking.get("grand_total", 0)
-    due_now = booking.get("due_now", 0)
-    due_later = booking.get("due_later", 0)
+    booking_id = html.escape((booking.get("id") or "")[:8].upper())
+
+    quote = booking.get("quote") or {}
+    breakdown = quote.get("breakdown") or []
+
+    rows_html = "".join(_line_row(item.get("label", ""), item.get("amount", 0))
+                        for item in breakdown if item)
+    eta = booking.get("eta") or {}
+    travel_fee = float(eta.get("extra_fee") or 0)
+    if travel_fee > 0:
+        zone_label = "Extended" if (eta.get("zone") == "extended") else "Travel"
+        rows_html += _line_row(f"Travel fee ({zone_label} zone · {eta.get('distance_miles')} mi)", travel_fee)
+
+    total = float(booking.get("grand_total") or 0)
+    due_now = float(booking.get("due_now") or 0)
+    due_later = float(booking.get("due_later") or 0)
     paid_status = booking.get("payment_status", "unpaid")
+    pay_method = (booking.get("payment_method") or "").lower()
     paid_chip = {
-        "paid_full": '<span style="background:#3d7a5c;color:#fff;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:600">PAID IN FULL</span>',
-        "paid_half": '<span style="background:#d4a435;color:#1e3a2f;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:600">HALF PAID</span>',
-        "unpaid": '<span style="background:#eef7f2;color:#3d7a5c;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:600">PAY ON ARRIVAL</span>',
+        "paid_full": '<span style="display:inline-block;background:#1e3a2f;color:#fff;padding:4px 10px;border-radius:999px;font-size:10.5px;font-weight:700;letter-spacing:0.06em">PAID IN FULL</span>',
+        "paid_half": '<span style="display:inline-block;background:#d4a435;color:#1e3a2f;padding:4px 10px;border-radius:999px;font-size:10.5px;font-weight:700;letter-spacing:0.06em">DEPOSIT PAID</span>',
+        "paid_full_pending_verify": '<span style="display:inline-block;background:#d4a435;color:#1e3a2f;padding:4px 10px;border-radius:999px;font-size:10.5px;font-weight:700;letter-spacing:0.06em">PAYMENT PENDING</span>',
+        "paid_half_pending_verify": '<span style="display:inline-block;background:#d4a435;color:#1e3a2f;padding:4px 10px;border-radius:999px;font-size:10.5px;font-weight:700;letter-spacing:0.06em">DEPOSIT PENDING</span>',
+        "unpaid": '<span style="display:inline-block;background:#eef7f2;color:#3d7a5c;padding:4px 10px;border-radius:999px;font-size:10.5px;font-weight:700;letter-spacing:0.06em">PAY ON ARRIVAL</span>',
     }.get(paid_status, "")
+
+    pay_method_label = {"paypal": "PayPal / card", "cash": "Cash on arrival"}.get(pay_method, pay_method.title() or "—")
+    pp_id = booking.get("paypal_capture_id") or booking.get("paypal_order_id")
+    pp_line = ""
+    if pp_id:
+        pp_line = f'<div style="font-size:11px;color:#8a9890;margin-top:4px">PayPal confirmation: <code style="font-family:Menlo,monospace">{html.escape(pp_id)}</code></div>'
+
+    # Property + pet details
+    extras_lines = []
+    if booking.get("property_type"):
+        extras_lines.append(f"<strong>Property:</strong> {html.escape(booking['property_type'].replace('_',' ').title())}")
+    if booking.get("bedrooms"):
+        extras_lines.append(f"<strong>Bedrooms:</strong> {int(booking['bedrooms'])}")
+    if booking.get("bathrooms"):
+        extras_lines.append(f"<strong>Bathrooms:</strong> {int(booking['bathrooms'])}")
+    if booking.get("pet_count"):
+        extras_lines.append(f"<strong>Pets:</strong> {int(booking['pet_count'])}")
+    if booking.get("notes"):
+        extras_lines.append(f"<strong>Note:</strong> {html.escape(booking['notes'])[:200]}")
+    access_method = booking.get("access_method")
+    if access_method:
+        access_labels = {"home": "I'll be home", "lockbox": "Lockbox / code",
+                         "hidden_key": "Hidden key", "garage_code": "Garage code",
+                         "doorman": "Doorman / front desk", "other": "Other"}
+        a = access_labels.get(access_method, access_method)
+        if booking.get("access_notes"):
+            a += f" — {html.escape(booking['access_notes'])[:120]}"
+        extras_lines.append(f"<strong>Access:</strong> {a}")
+    extras_block = ""
+    if extras_lines:
+        items = "".join(f'<li style="margin:3px 0;color:#5f6f67">{ln}</li>' for ln in extras_lines)
+        extras_block = f'<ul style="list-style:none;padding:0;margin:14px 0 0 0;font-size:13px;line-height:1.55">{items}</ul>'
+
     return f"""
-    <div style="font-family:-apple-system,Segoe UI,Arial,sans-serif;line-height:1.65;color:#1f2a24;max-width:560px;margin:0 auto;padding:0">
-      <div style="background:linear-gradient(135deg,#1e3a2f 0%,#3d7a5c 100%);color:#fff;padding:28px 26px;border-radius:14px 14px 0 0">
-        <div style="font-size:13px;letter-spacing:2px;text-transform:uppercase;opacity:.85">Booking confirmed</div>
-        <div style="font-family:Georgia,serif;font-size:30px;margin-top:8px">You’re booked, {name} 🐾</div>
+    <div style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Arial,sans-serif;line-height:1.65;color:#1f2a24;max-width:600px;margin:0 auto;padding:0;background:#fdf9f5">
+      <!-- Header -->
+      <div style="background:linear-gradient(135deg,#1e3a2f 0%,#3d7a5c 100%);color:#fff;padding:32px 28px 26px;text-align:left">
+        <div style="font-size:11px;letter-spacing:2.6px;text-transform:uppercase;opacity:.85;font-weight:700">Booking confirmed · Receipt</div>
+        <div style="font-family:Georgia,serif;font-size:30px;margin-top:10px;line-height:1.15">You're booked, {name} 🐾</div>
+        <div style="font-size:13px;opacity:.88;margin-top:8px">Receipt #{booking_id} · Pawfect &amp; Pristine</div>
       </div>
-      <div style="background:#fdf9f5;padding:24px 26px;border:1px solid #e6efe9;border-top:0;border-radius:0 0 14px 14px">
-        <div style="font-size:15px;margin-bottom:18px">Here’s the recap. We’ll text/email you if anything changes.</div>
-        <table style="width:100%;font-size:14px;border-collapse:collapse">
-          <tr><td style="padding:6px 0;color:#5f6f67;width:130px">Service</td><td style="padding:6px 0"><strong>{svc}</strong>{(' · ' + tier) if tier else ''}</td></tr>
-          <tr><td style="padding:6px 0;color:#5f6f67">When</td><td style="padding:6px 0"><strong>{when_date}</strong>{(' at ' + when_time) if when_time else ''}</td></tr>
-          <tr><td style="padding:6px 0;color:#5f6f67">Where</td><td style="padding:6px 0">{addr}</td></tr>
-          <tr><td colspan="2" style="padding:10px 0"><hr style="border:none;border-top:1px solid #e6efe9"/></td></tr>
-          <tr><td style="padding:6px 0;color:#5f6f67">Total</td><td style="padding:6px 0;font-family:Georgia,serif;font-size:22px;color:#1e3a2f"><strong>${total:.2f}</strong></td></tr>
-          <tr><td style="padding:6px 0;color:#5f6f67">Paid today</td><td style="padding:6px 0">${due_now:.2f} {paid_chip}</td></tr>
-          <tr><td style="padding:6px 0;color:#5f6f67">Due on arrival</td><td style="padding:6px 0">${due_later:.2f}</td></tr>
+
+      <!-- Service block -->
+      <div style="background:#fff;border:1px solid #e6efe9;border-top:0;padding:24px 28px">
+        <div style="font-size:11px;letter-spacing:1.6px;text-transform:uppercase;color:#5f6f67;font-weight:700">Your service</div>
+        <div style="font-family:Georgia,serif;font-size:22px;color:#1e3a2f;margin-top:6px">{svc}{(' · ' + tier) if tier else ''}</div>
+        <table style="width:100%;font-size:13.5px;border-collapse:collapse;margin-top:14px">
+          <tr><td style="padding:5px 0;color:#5f6f67;width:90px">When</td><td><strong>{when_date}</strong>{(' at ' + when_time) if when_time else ''}</td></tr>
+          <tr><td style="padding:5px 0;color:#5f6f67">Where</td><td>{addr}</td></tr>
+          <tr><td style="padding:5px 0;color:#5f6f67">Payment</td><td>{pay_method_label} · {paid_chip}{pp_line}</td></tr>
         </table>
-        <div style="margin-top:22px;font-size:13px;color:#5f6f67">Need to change anything? Visit your <a href="https://www.pawfectpristine.xyz/dashboard" style="color:#3d7a5c;font-weight:600">dashboard</a> or just reply to this email.</div>
-        <div style="margin-top:14px;font-size:12px;color:#8a9890">— Mekhi &amp; the Pawfect &amp; Pristine team · (470) 381-4682</div>
+        {extras_block}
+      </div>
+
+      <!-- Itemized receipt -->
+      <div style="background:#fff;border:1px solid #e6efe9;border-top:0;padding:24px 28px">
+        <div style="font-size:11px;letter-spacing:1.6px;text-transform:uppercase;color:#5f6f67;font-weight:700;margin-bottom:8px">Itemized total</div>
+        <table style="width:100%;border-collapse:collapse">
+          {rows_html}
+          <tr><td colspan="2" style="padding:6px 0"><div style="border-top:1px dashed #cdd9d2"></div></td></tr>
+          <tr>
+            <td style="padding:10px 0;font-size:14px;font-weight:700;color:#1e3a2f">Total</td>
+            <td style="padding:10px 0;font-family:Georgia,serif;font-size:24px;color:#1e3a2f;text-align:right;font-weight:700;font-variant-numeric:tabular-nums">{_fmt_money(total)}</td>
+          </tr>
+          <tr>
+            <td style="padding:6px 0;font-size:13px;color:#5f6f67">Paid today</td>
+            <td style="padding:6px 0;font-size:13px;color:#5f6f67;text-align:right;font-variant-numeric:tabular-nums">{_fmt_money(due_now)}</td>
+          </tr>
+          <tr>
+            <td style="padding:6px 0;font-size:13px;color:#5f6f67">Due on arrival</td>
+            <td style="padding:6px 0;font-size:13px;color:#5f6f67;text-align:right;font-variant-numeric:tabular-nums">{_fmt_money(due_later)}</td>
+          </tr>
+        </table>
+      </div>
+
+      <!-- Footer -->
+      <div style="background:#fff;border:1px solid #e6efe9;border-top:0;border-radius:0 0 12px 12px;padding:22px 28px 26px">
+        <div style="font-size:13px;color:#5f6f67;margin-bottom:10px">Need to make changes? Manage this booking from your <a href="https://www.pawfectpristine.xyz/dashboard" style="color:#3d7a5c;font-weight:600;text-decoration:none">dashboard</a> or just reply to this email.</div>
+        <div style="font-size:12px;color:#8a9890;margin-top:14px">— Mekhi &amp; the Pawfect &amp; Pristine team · <a href="tel:+14703814682" style="color:#5f6f67;text-decoration:none">(470) 381-4682</a> · <a href="mailto:hello@pawfectpristine.com" style="color:#5f6f67;text-decoration:none">hello@pawfectpristine.com</a></div>
       </div>
     </div>
     """
@@ -441,22 +542,48 @@ def owner_booking_html(booking: dict) -> str:
     notes = html.escape(booking.get("notes") or "")
     access = html.escape(booking.get("access_method", ""))
     access_notes = html.escape(booking.get("access_notes") or "")
-    total = booking.get("grand_total", 0)
-    due_now = booking.get("due_now", 0)
-    pp_id = html.escape(booking.get("paypal_order_id") or "—")
+    total = float(booking.get("grand_total") or 0)
+    due_now = float(booking.get("due_now") or 0)
+    due_later = float(booking.get("due_later") or 0)
+    pp_id = html.escape(booking.get("paypal_capture_id") or booking.get("paypal_order_id") or "—")
     status = booking.get("payment_status", "unpaid")
+
+    quote = booking.get("quote") or {}
+    breakdown = quote.get("breakdown") or []
+    rows = "".join(_line_row(item.get("label", ""), item.get("amount", 0)) for item in breakdown if item)
+    eta = booking.get("eta") or {}
+    travel_fee = float(eta.get("extra_fee") or 0)
+    if travel_fee > 0:
+        rows += _line_row(f"Travel ({eta.get('distance_miles')} mi · {eta.get('zone')})", travel_fee)
+
+    extras = []
+    if booking.get("property_type"):
+        extras.append(f"Property: {html.escape(booking['property_type'].replace('_',' ').title())}")
+    if booking.get("bedrooms"):
+        extras.append(f"Beds: {int(booking['bedrooms'])}")
+    if booking.get("bathrooms"):
+        extras.append(f"Baths: {int(booking['bathrooms'])}")
+    if booking.get("pet_count"):
+        extras.append(f"Pets: {int(booking['pet_count'])}")
+    extras_line = " · ".join(extras) if extras else "—"
+
     return f"""
-    <div style="font-family:-apple-system,Segoe UI,Arial,sans-serif;line-height:1.6;color:#1f2a24">
-      <h2 style="margin-bottom:6px">🐾 New booking · ${total:.2f}</h2>
-      <div style="color:#5f6f67;font-size:13px;margin-bottom:14px">{status.upper()} · paid today ${due_now:.2f}</div>
-      <table style="font-size:14px;border-collapse:collapse">
-        <tr><td style="padding:4px 12px 4px 0;color:#5f6f67">Customer</td><td><strong>{name}</strong> · <a href="tel:{phone}">{phone}</a></td></tr>
-        <tr><td style="padding:4px 12px 4px 0;color:#5f6f67">Service</td><td>{svc}{(' · ' + tier) if tier else ''}</td></tr>
-        <tr><td style="padding:4px 12px 4px 0;color:#5f6f67">When</td><td>{when_date} {when_time}</td></tr>
-        <tr><td style="padding:4px 12px 4px 0;color:#5f6f67">Address</td><td>{addr}</td></tr>
-        <tr><td style="padding:4px 12px 4px 0;color:#5f6f67">Access</td><td>{access}{(' — ' + access_notes) if access_notes else ''}</td></tr>
-        <tr><td style="padding:4px 12px 4px 0;color:#5f6f67">Notes</td><td>{notes or '—'}</td></tr>
-        <tr><td style="padding:4px 12px 4px 0;color:#5f6f67">PayPal order</td><td><code>{pp_id}</code></td></tr>
+    <div style="font-family:-apple-system,Segoe UI,Arial,sans-serif;line-height:1.6;color:#1f2a24;max-width:580px">
+      <h2 style="margin-bottom:6px;font-family:Georgia,serif;color:#1e3a2f">🐾 New booking · {_fmt_money(total)}</h2>
+      <div style="color:#5f6f67;font-size:13px;margin-bottom:14px">{status.upper().replace('_', ' ')} · paid today {_fmt_money(due_now)} · due on arrival {_fmt_money(due_later)}</div>
+      <table style="font-size:14px;border-collapse:collapse;margin-bottom:18px">
+        <tr><td style="padding:4px 14px 4px 0;color:#5f6f67">Customer</td><td><strong>{name}</strong> · <a href="tel:{phone}">{phone}</a></td></tr>
+        <tr><td style="padding:4px 14px 4px 0;color:#5f6f67">Service</td><td>{svc}{(' · ' + tier) if tier else ''}</td></tr>
+        <tr><td style="padding:4px 14px 4px 0;color:#5f6f67">When</td><td>{when_date} {when_time}</td></tr>
+        <tr><td style="padding:4px 14px 4px 0;color:#5f6f67">Address</td><td>{addr}</td></tr>
+        <tr><td style="padding:4px 14px 4px 0;color:#5f6f67">Extras</td><td>{extras_line}</td></tr>
+        <tr><td style="padding:4px 14px 4px 0;color:#5f6f67">Access</td><td>{access}{(' — ' + access_notes) if access_notes else ''}</td></tr>
+        <tr><td style="padding:4px 14px 4px 0;color:#5f6f67">Notes</td><td>{notes or '—'}</td></tr>
+        <tr><td style="padding:4px 14px 4px 0;color:#5f6f67">PayPal</td><td><code style="font-family:Menlo,monospace;font-size:12px">{pp_id}</code></td></tr>
+      </table>
+      <div style="font-size:11.5px;letter-spacing:1.6px;text-transform:uppercase;color:#5f6f67;font-weight:700;margin-bottom:6px">Itemized total</div>
+      <table style="width:100%;border-collapse:collapse;border-top:1px solid #e6efe9">{rows}
+        <tr><td style="padding:8px 0;border-top:1px dashed #cdd9d2;font-weight:700">Total</td><td style="padding:8px 0;border-top:1px dashed #cdd9d2;text-align:right;font-family:Georgia,serif;font-size:18px">{_fmt_money(total)}</td></tr>
       </table>
     </div>
     """
@@ -772,7 +899,7 @@ async def create_booking(payload: BookingCreate, user: dict = Depends(get_curren
     if z["zone"] == "out_of_range":
         raise HTTPException(
             status_code=400,
-            detail=f"Sorry — {addr_clean} is {miles} mi from Decatur, outside our service area. Call (470) 381-4682 for a custom quote.",
+            detail=f"Sorry — {addr_clean} is {miles} mi from our base, outside our service area. Call (470) 381-4682 for a custom quote.",
         )
     eta_dict = {"distance_miles": miles, "duration_minutes": mins,
                 "zone": z["zone"], "extra_fee": z["extra_fee"]}

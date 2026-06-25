@@ -277,12 +277,12 @@ frontend:
 metadata:
   created_by: "main_agent"
   version: "1.7"
-  test_sequence: 5
+  test_sequence: 6
   run_ui: false
 
 test_plan:
   current_focus:
-    - "EtaCalculator /undefined/api/eta bug fix verified - all 7 tests passed"
+    - "Origin move + itemized receipt emails - all 11 tests passed"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
@@ -518,6 +518,74 @@ agent_communication:
             ✓ UI fits within mobile viewport without layout issues
             
             CONCLUSION: Both user-reported bugs are FIXED. Services now always display (via fallback), and step 1 is no longer overloaded (upsells moved to new step 2).
+
+  - task: "Move origin to 3215 Allison Circle + itemized receipt-style booking emails"
+    implemented: true
+    working: true
+    file: "backend/server.py, backend/.env"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            User wants ETA from 3215 Allison Circle (Panthersville, DeKalb County GA
+            30034, lat 33.6712656, lon -84.2528801). Updated ORIGIN_LAT/LON/LABEL in
+            backend/.env and the defaults in server.py. Also updated out-of-range
+            error message from "from Decatur" to "from our base". Confirmed:
+              199 N Decatur Rd → 10.49 mi · extended · +$10 travel
+              Buckhead → 19.74 mi · out_of_range
+              3215 Allison Circle → 0.0 mi · standard
+            Rebuilt booking_confirmation_html into a real itemized receipt with:
+              - Header with paw emoji, receipt number, payment chip
+              - "Your service" block with date/time/address, payment method, PayPal
+                confirmation id when present, property type / beds / baths / pets /
+                notes / access method
+              - "Itemized total" table: tier base, extra room charges, every add-on,
+                property modifier, discounts (rendered in green with minus sign),
+                advance fee, travel fee, then bold total + paid today + due on arrival
+              - Footer with dashboard link, phone, email
+            Owner notification email enhanced with same breakdown table + extras line
+            ("Beds: 3 · Baths: 2 · Pets: 0").
+        - working: true
+          agent: "testing"
+          comment: |
+            ✅ ALL 11 TESTS PASSED (100%) - BOTH CHANGES VERIFIED SUCCESSFULLY
+            
+            CHANGE 1 — Service area origin moved to 3215 Allison Circle:
+            ✅ A1: Origin address (3215 Allison Circle) → zone=standard, distance=0.0mi, extra_fee=$0
+            ✅ A2: 199 N Decatur Rd → zone=extended, distance=10.49mi, extra_fee=$10 (was standard before)
+            ✅ A3: Times Square, NY → zone=out_of_range, distance=868.64mi (>500mi as expected)
+            ✅ A4: Out-of-range error message says "from our base" (NOT "from Decatur") + includes phone (470) 381-4682
+            
+            CHANGE 2 — Itemized receipt emails:
+            ✅ B5: Created booking with full itemized breakdown (7 items):
+              - Tier base: "General Cleaning — Heavy"
+              - Extra charges: "1 extra bedroom", "1 extra bathroom"
+              - Add-ons: "Baseboard detailing", "Window cleaning"
+              - Discount: "First-time customer offer (-25%)" (rendered in green with minus)
+              - Advance fee: "Advance booking fee (≥7 days out)" (+$0.99)
+              - Travel fee: $10 (extended zone)
+              - Grand total: $142.24 (breakdown_sum=$132.24 + travel_fee=$10)
+              - Booking persisted correctly with all breakdown items
+            
+            EMAIL VERIFICATION:
+            ✅ C6: Backend logs confirm 3 emails sent via Resend API (all returned 200 OK):
+              1. Welcome email: "Your 25% off first-booking offer" (on signup)
+              2. Customer confirmation: "Booking confirmed — General Cleaning on 2026-07-10"
+              3. Owner notification: "🐾 New booking · $142.24 · Receipt Tester" to hello@pawfectpristine.com
+            
+            REGRESSION TESTS (5/5 PASSED):
+            ✅ D7: POST /api/auth/login (admin) → 200
+            ✅ D8: GET /api/catalog → 200 (7 services)
+            ✅ D9: GET /api/paypal/config → 200 (enabled=true, env=live)
+            ✅ D10: POST /api/paypal/create-order → 200 (real PayPal order ID)
+            ✅ D11: GET /api/geocode/suggest → 200 (LocationIQ working)
+            
+            CONCLUSION: Both changes are working perfectly. Origin moved to Panthersville, distances 
+            recalculated correctly, error messages updated. Itemized receipt emails contain full 
+            breakdown with all line items, discounts in green, and correct totals.
 
   - task: "EtaCalculator: stop building URL from raw env (fixes /undefined/api/eta on Vercel)"
     implemented: true
@@ -964,3 +1032,36 @@ agent_communication:
         LocationIQ integration is FULLY WORKING. All geocoding, address validation, zone enforcement, 
         and auth requirements are functioning correctly. The previous Nominatim rate-limiting problems 
         are completely resolved. All 13 critical tests passed with no issues.
+
+
+    - agent: "testing"
+      message: |
+        ✅ ORIGIN MOVE + ITEMIZED RECEIPTS TESTING COMPLETE - ALL 11 TESTS PASSED (100%)
+        
+        Tested two backend changes requested by user:
+        
+        CHANGE 1 — Service area origin moved from Decatur to 3215 Allison Circle, Panthersville:
+        ✅ Origin address (3215 Allison Circle) → zone=standard, 0.0mi, $0 fee
+        ✅ 199 N Decatur Rd → zone=extended, 10.49mi, $10 fee (was standard zone before)
+        ✅ Times Square, NY → zone=out_of_range, 868.64mi (correctly >500mi)
+        ✅ Out-of-range error message now says "from our base" (NOT "from Decatur")
+        
+        CHANGE 2 — Booking emails are now itemized receipts:
+        ✅ Created test booking with full breakdown (7 line items):
+           - Tier base: General Cleaning — Heavy
+           - Extra charges: 1 extra bedroom, 1 extra bathroom
+           - Add-ons: Baseboard detailing, Window cleaning
+           - Discount: First-time customer offer (-25%) rendered in green with minus sign
+           - Advance fee: $0.99 (≥7 days out)
+           - Travel fee: $10 (extended zone)
+           - Grand total: $142.24 (breakdown sum $132.24 + travel $10)
+        ✅ Booking persisted correctly with all breakdown items in quote.breakdown
+        ✅ Backend logs confirm 3 Resend emails sent (all 200 OK):
+           1. Welcome email on signup
+           2. Customer booking confirmation with itemized receipt
+           3. Owner notification to hello@pawfectpristine.com with itemized breakdown
+        
+        REGRESSION TESTS (5/5 PASSED):
+        ✅ Admin login, catalog, PayPal config, PayPal create-order, geocode suggest
+        
+        All changes working correctly. Ready for production.
