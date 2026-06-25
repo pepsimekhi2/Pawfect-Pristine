@@ -5,7 +5,7 @@
   "outputDirectory": "frontend/build",
   "framework": "create-react-app",
   "rewrites": [
-    { "source": "/api/:path*", "destination": "/api/index" },
+    { "source": "/api/:path*", "destination": "https://48511398-4d7d-4642-be1e-d796c8f83659.preview.emergentagent.com/api/:path*" },
     { "source": "/((?!api/|.*\\.).*)", "destination": "/index.html" }
   ],
   "headers": [
