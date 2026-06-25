@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { UserPlus } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { PrimaryButton } from "../components/ui-kit";
@@ -8,6 +8,7 @@ import AuthLayout from "./AuthLayout";
 export default function SignupPage() {
   const { register } = useAuth();
   const nav = useNavigate();
+  const loc = useLocation();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -32,7 +33,8 @@ export default function SignupPage() {
         phone: phone.trim() || undefined,
         marketing_opt_in: marketingOptIn,
       });
-      nav("/dashboard", { replace: true });
+      const next = loc.state?.from || "/dashboard";
+      nav(next, { replace: true });
     } catch (err) {
       setError(err?.response?.data?.detail || "Couldn't create your account. Try again.");
     } finally {

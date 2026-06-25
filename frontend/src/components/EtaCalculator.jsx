@@ -3,6 +3,7 @@ import axios from "axios";
 import { motion, AnimatePresence } from "framer-motion";
 import { MapPin, Clock, AlertTriangle, Phone, Sparkles } from "lucide-react";
 import { PrimaryButton } from "./ui-kit";
+import AddressAutocomplete from "./AddressAutocomplete";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -51,13 +52,15 @@ export default function EtaCalculator() {
 
         <div className="bg-white border border-[var(--border)] rounded-[20px] p-6 md:p-10 shadow-sm">
           <form onSubmit={submit} className="flex flex-col sm:flex-row gap-3">
-            <input
-              data-testid="eta-input"
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              placeholder="e.g. 1280 W Peachtree St, Atlanta, GA"
-              className="pp-input flex-1"
-            />
+            <div className="flex-1">
+              <AddressAutocomplete
+                value={address}
+                onChange={setAddress}
+                verifyOnBlur={false}
+                placeholder="e.g. 1280 W Peachtree St, Atlanta, GA"
+                testid="eta-autocomplete"
+              />
+            </div>
             <PrimaryButton testid="eta-submit" type="submit" disabled={loading || !address.trim()}>
               {loading ? "Routing…" : "Get my ETA"}
             </PrimaryButton>

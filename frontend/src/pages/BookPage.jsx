@@ -10,6 +10,7 @@ import HelpBanner from "../components/HelpBanner";
 import PayPalPayment from "../components/PayPalPayment";
 import PaymentGuidelines from "../components/PaymentGuidelines";
 import UpsellPanel from "../components/UpsellPanel";
+import AddressAutocomplete from "../components/AddressAutocomplete";
 
 const confettiColors = ["#3d7a5c", "#7a9e8a", "#a8cfc0", "#d4a435", "#eef7f2"];
 function fireConfetti() {
@@ -60,6 +61,7 @@ export default function BookPage() {
   const [tosAccepted, setTosAccepted] = useState(false);
   const [quote, setQuote] = useState(null);
   const [eta, setEta] = useState(null);
+  const [zoneInfo, setZoneInfo] = useState(null); // from AddressAutocomplete verify
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(null);
   const [error, setError] = useState("");
@@ -190,17 +192,7 @@ export default function BookPage() {
     }
   }, [paymentPlan]); // eslint-disable-line
 
-  // ETA on address change (debounced)
-  useEffect(() => {
-    if (!address || address.length < 6) { setEta(null); return; }
-    const t = setTimeout(async () => {
-      try {
-        const { data } = await api.post("/api/eta", { address });
-        setEta(data);
-      } catch { setEta(null); }
-    }, 700);
-    return () => clearTimeout(t);
-  }, [address]);
+  // ETA is now derived inside the AddressAutocomplete on select/blur.
 
   // Fetch which time slots are already taken or too late, given the chosen service/tier duration
   useEffect(() => {
@@ -225,7 +217,8 @@ export default function BookPage() {
   const s2Valid = true; // customize step — all values have defaults
   const s3Valid = !!date && !!time;
   const s4Valid = name.trim() && phone.trim() && address.trim() && accessMethod
-    && (accessMethod !== "other" || accessNotes.trim().length > 2);
+    && (accessMethod !== "other" || accessNotes.trim().length > 2)
+    && (!zoneInfo || zoneInfo.zone !== "out_of_range");
   // For pay_later: just need cash method. For half/all-now: must have captured PayPal payment.
   const requiresPayPal = paymentPlan !== "pay_later" && paymentMethod === "paypal";
   const s5Valid = paymentPlan === "pay_later"
@@ -419,12 +412,18 @@ export default function BookPage() {
                 </div>
                 <div>
                   <SmallLabel>Service address</SmallLabel>
-                  <input className="pp-input mt-1.5" placeholder="Street, City, State ZIP" data-testid="address-input" value={address} onChange={(e) => setAddress(e.target.value)} />
-                  {eta && (
-                    <div className="text-[12px] text-[var(--text-muted)] mt-2" data-testid="eta-inline">
-                      ~{eta.distance_miles} mi · {Math.round(eta.duration_minutes)} min{eta.extra_fee > 0 ? ` · +$${eta.extra_fee} travel fee` : " · standard zone"}
-                    </div>
-                  )}
+                  <div className="mt-1.5">
+                    <AddressAutocomplete
+                      value={address}
+                      onChange={setAddress}
+                      onZone={(z) => {
+                        setZoneInfo(z);
+                        if (z) setEta({ distance_miles: z.distance_miles, duration_minutes: 0, extra_fee: z.extra_fee, zone: z.zone });
+                      }}
+                      placeholder="Start typing your street address…"
+                      testid="address-autocomplete"
+                    />
+                  </div>
                 </div>
                 {category === "pet" ? (
                   <Stepper testid="pet-stepper" label="Number of pets" value={Math.max(1, pets)} onChange={setPets} min={1} max={10} />

@@ -419,7 +419,7 @@ export default function App() {
       <Route path="/" element={<HomePage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/signup" element={<SignupPage />} />
-      <Route path="/book" element={<BookPage />} />
+      <Route path="/book" element={<RequireAuth><BookPage /></RequireAuth>} />
       <Route path="/tos" element={<TosPage />} />
       <Route path="/dashboard" element={<RequireAuth><DashboardPage /></RequireAuth>} />
       <Route path="/admin" element={<AdminGate><AdminPage /></AdminGate>} />
