@@ -1172,3 +1172,135 @@ textarea.pp-input { min-height: 100px; resize: vertical; font-family: inherit; }
   box-shadow: 0 20px 60px rgba(15,32,24,0.4);
 }
 
+
+
+/* ============= On-site PayPal payment ============= */
+.pp-pay-section-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+.pp-pay-divider {
+  position: relative;
+  text-align: center;
+  margin: 6px 0;
+}
+.pp-pay-divider::before {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; top: 50%;
+  height: 1px;
+  background: var(--border);
+}
+.pp-pay-divider span {
+  position: relative;
+  display: inline-block;
+  padding: 0 12px;
+  background: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.paypal-card-submit {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 14px 18px;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 14px;
+  background: var(--green-dark);
+  color: #fff;
+  border: 0;
+  cursor: pointer;
+  transition: background 0.18s ease, transform 0.08s ease;
+  box-shadow: 0 4px 14px rgba(30,58,47,0.18);
+}
+.paypal-card-submit:hover { background: var(--green); }
+.paypal-card-submit:active { transform: translateY(1px); }
+.paypal-card-submit:disabled { opacity: 0.6; cursor: wait; }
+.payment-success {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 18px;
+  background: var(--green-light);
+  border: 1px solid var(--green-pale);
+  border-radius: 14px;
+}
+
+/* PayPal card-fields iframes need room */
+.paypal-card-field-container,
+[data-paypal-card-fields-instance] {
+  min-height: 48px;
+}
+
+/* ============= Mobile polish ============= */
+@media (max-width: 640px) {
+  /* Kill any horizontal scroll caused by stray wide nodes */
+  html, body { overflow-x: hidden; }
+
+  /* Tighter base spacing */
+  .pp-input { font-size: 16px !important; } /* prevent iOS zoom on focus */
+
+  /* Hero typography */
+  .hero-gradient { padding: 56px 22px 48px !important; }
+  .hero-gradient h1 { font-size: 38px !important; line-height: 1.07 !important; }
+
+  /* Booking card padding */
+  .max-w-3xl .bg-white.border { padding: 22px !important; border-radius: 18px !important; }
+
+  /* Plan cards stack & breathe */
+  .plan-card { padding: 14px !important; }
+  .plan-icon { font-size: 22px !important; }
+  .tier-card { padding: 14px !important; }
+
+  /* Step header copy */
+  .font-serif.text-3xl,
+  .font-serif.md\\:text-5xl { font-size: 28px !important; }
+
+  /* Calendar tap targets */
+  .calendar-day { min-height: 38px !important; }
+  .time-slot { min-height: 38px !important; font-size: 12.5px !important; }
+
+  /* Buttons full-width on mobile in the booking flow nav */
+  .pp-bookflow-nav button { flex: 1; justify-content: center; }
+
+  /* Sticky next bar so user always sees CTA */
+  .pp-bookflow-cta { position: sticky; bottom: 8px; }
+
+  /* Tighter footer */
+  footer .max-w-6xl { padding-top: 36px !important; padding-bottom: 28px !important; }
+
+  /* Headings in sections */
+  section h2 { font-size: 28px !important; line-height: 1.15 !important; }
+  section .px-6 { padding-left: 18px !important; padding-right: 18px !important; }
+
+  /* Amount callout — keep big but not gigantic */
+  .amount-callout .font-serif { font-size: 36px !important; }
+
+  /* Payment guidelines list spacing */
+  .guidelines-card { padding: 16px !important; }
+
+  /* Service grid cards */
+  .card-clean { padding: 18px !important; }
+
+  /* Stats grid */
+  .grid.grid-cols-2.md\\:grid-cols-4 { gap: 14px !important; }
+}
+
+/* iOS safe-area padding for sticky footers */
+@supports(padding: max(0px)) {
+  body { padding-bottom: env(safe-area-inset-bottom); }
+}

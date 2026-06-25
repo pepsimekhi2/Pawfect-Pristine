@@ -111,6 +111,20 @@ user_problem_statement: |
   Firebase Realtime Database at https://mekhis-creations-default-rtdb.firebaseio.com/
   and provide Firebase rules.
 
+  v1.6 (2026-07) — Make-money pass:
+  - Replace PayPal Hosted Button with on-site card processing (Orders v2 API).
+    POST /api/paypal/create-order and /api/paypal/capture-order. Booking now
+    stores paypal_order_id + paypal_capture_id and payment_status is set to
+    paid_full / paid_half automatically on capture (no more pending_verify).
+  - Fix Resend transactional emails — RESEND_API_KEY wired in .env. Sends
+    welcome 25%-off email on signup and booking confirmation to customer +
+    owner notification (hello@pawfectpristine.com) on every booking.
+  - Mobile UI cleanup (typography, payment card form, sticky nav, tap targets).
+  - Remove Twilio integration entirely. Restore real DashboardPage (was
+    accidentally clobbered by a copy of BookPage).
+  - Recreate backend/.env + frontend/.env so the project boots from a clean
+    container.
+
 backend:
   - task: "Auth (register/login/me/logout) — email + password, JWT, bcrypt"
     implemented: true
@@ -262,20 +276,141 @@ frontend:
 
 metadata:
   created_by: "main_agent"
-  version: "1.2"
-  test_sequence: 2
+  version: "1.6"
+  test_sequence: 3
   run_ui: false
 
 test_plan:
   current_focus:
-    - "Auth (register/login/me/logout) — email + password, JWT, bcrypt"
-    - "Booking create with tier, payment_plan, payment_method, tos_accepted, advance fee"
-    - "GET /api/bookings/upcoming and POST /api/bookings/{id}/cancel"
-    - "GET /api/tos returning TOS text + version"
-    - "Firebase RTDB dual-write mirror (best-effort) + /api/firebase/status"
+    - "PayPal Orders v2 — create-order / capture-order endpoints"
+    - "Booking create with paypal_order_id / paypal_capture_id sets paid_full / paid_half"
+    - "Resend transactional emails (signup welcome + booking confirmation + owner notification)"
+    - "Existing auth + booking + dashboard flows still pass after refactor"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
+
+agent_communication:
+    - agent: "main"
+      message: |
+        v1.6 changes to test (backend only — frontend will be tested separately on user approval):
+        
+        1. NEW endpoint: GET /api/paypal/config → should return enabled=true, env="live",
+           non-null client_id, currency="USD".
+        2. NEW endpoint: POST /api/paypal/create-order with body {amount: 1.00, currency: "USD"}
+           should return {id, status:"CREATED", links:[...]}. Hits real PayPal live API.
+        3. NEW endpoint: POST /api/paypal/capture-order with body {order_id: "..."} — note
+           this will FAIL with 4xx if order has not been approved by a real user (this is
+           expected; we just need to verify the error path returns a meaningful 502).
+        4. Booking with paypal_capture_id + payment_method=paypal + payment_plan=all_now
+           should result in payment_status="paid_full" (not pending_verify).
+        5. Booking with paypal_capture_id + payment_plan=half_now → payment_status="paid_half".
+        6. Booking WITHOUT paypal_capture_id but payment_method=paypal still falls back to
+           paid_full_pending_verify (legacy support).
+        7. Booking with payment_method=cash should set payment_status="unpaid".
+        8. All existing tests (auth, /api/quote, /api/eta, /api/catalog, /api/tos, /api/bookings/me,
+           /api/bookings/upcoming, /api/bookings/{id}/cancel, /api/firebase/status) should still pass.
+        9. Twilio removed — send_owner_sms always returns False, but booking still saves.
+        10. Resend integration: POST /api/auth/register should trigger a welcome email
+            (best-effort, async). RESEND_API_KEY is configured. Can't easily assert in
+            backend tests; just confirm endpoint still returns 200.
+        
+        Test creds: admin@pawfectpristine.com / Pawfect2026! (see /app/memory/test_credentials.md).
+        Booking time slot conflict: tests should pick fresh future dates / times to avoid 409s.
+
+  - task: "PayPal Orders v2 create-order + capture-order endpoints"
+    implemented: true
+    working: true
+    file: "backend/paypal_client.py, backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            New endpoints /api/paypal/config, /api/paypal/create-order, /api/paypal/capture-order.
+            Uses live PayPal credentials via httpx (no SDK). Smoke test from terminal confirmed
+            create-order returns a real PayPal order id from api-m.paypal.com.
+        - working: true
+          agent: "testing"
+          comment: |
+            ✓ ALL PAYPAL TESTS PASSED:
+            (1) GET /api/paypal/config returns enabled=true, env="live", non-null client_id, currency="USD"
+            (2) POST /api/paypal/create-order with valid data returns real PayPal order ID (2N741711ED4550019), status="CREATED", links array
+            (3) POST /api/paypal/create-order with amount=-1.00 correctly returns 400 error
+            (4) POST /api/paypal/capture-order with invalid order_id returns 502 error with detail field (PayPal returns 404, backend catches and returns 502)
+            All PayPal endpoints working correctly with LIVE PayPal API.
+
+  - task: "Booking create persists PayPal capture and sets payment_status automatically"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            BookingCreate model accepts paypal_order_id, paypal_capture_id, paypal_captured_amount.
+            payment_status is now derived: paid_full / paid_half on capture present, else legacy
+            pending_verify if method=paypal, else unpaid.
+        - working: true
+          agent: "testing"
+          comment: |
+            ✓ ALL BOOKING PAYMENT_STATUS TESTS PASSED:
+            (1) Booking with paypal_capture_id + payment_plan="all_now" + payment_method="paypal" → payment_status="paid_full" (NOT "paid_full_pending_verify")
+            (2) Booking with paypal_capture_id + payment_plan="half_now" + payment_method="paypal" → payment_status="paid_half" (NOT "paid_half_pending_verify")
+            (3) Booking WITHOUT paypal_capture_id but payment_method="paypal" + payment_plan="all_now" → payment_status="paid_full_pending_verify" (legacy fallback)
+            (4) Booking with payment_method="cash" + payment_plan="pay_later" → payment_status="unpaid"
+            All payment_status logic working correctly. Bookings persist with correct status based on PayPal capture presence.
+
+  - task: "Resend transactional emails — welcome + booking confirmation + owner notification"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            RESEND_API_KEY + RESEND_FROM (bookings@pawfectpristine.xyz verified domain) wired in
+            backend/.env. send_resend_email rewritten to accept reply_to + list-of-emails. Booking
+            create now fires two emails (customer confirmation + owner notification at
+            hello@pawfectpristine.com). Smoke test from terminal returned a Resend message id.
+        - working: true
+          agent: "testing"
+          comment: |
+            ✓ RESEND EMAIL INTEGRATION WORKING:
+            Backend logs confirm Resend emails are being sent successfully:
+            - Welcome email sent on user registration (subject: "Your 25% off first-booking offer")
+            - Booking confirmation sent to customer (subject: "Booking confirmed — General Cleaning on [date]")
+            - Owner notification sent to hello@pawfectpristine.com (subject: "🐾 New booking · $[amount] · [customer name]")
+            All emails return 200 OK from Resend API. Email integration working correctly.
+
+  - task: "Twilio removed — sms_sent now always false but booking still persists"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "low"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            Twilio import + env vars + Client() calls removed entirely. send_owner_sms returns
+            False unconditionally. Admin notify-otw endpoint now returns sms:/tel: deeplinks only.
+        - working: true
+          agent: "testing"
+          comment: |
+            ✓ TWILIO REMOVAL VERIFIED:
+            Bookings are created successfully without Twilio dependency. sms_sent field is set to false.
+            Booking persistence works correctly. No Twilio-related errors in backend logs.
+            Admin notify-otw endpoint returns sms:/tel: deeplinks as expected.
 
 agent_communication:
     - agent: "main"
@@ -321,3 +456,62 @@ agent_communication:
         3 test bookings created and verified (half_now, all_now, pay_later payment plans)
         
         No issues found. Backend is production-ready.
+    - agent: "main"
+      message: |
+        v1.6 changes to test (backend only — frontend will be tested separately on user approval):
+        
+        1. NEW endpoint: GET /api/paypal/config → should return enabled=true, env="live",
+           non-null client_id, currency="USD".
+        2. NEW endpoint: POST /api/paypal/create-order with body {amount: 1.00, currency: "USD"}
+           should return {id, status:"CREATED", links:[...]}. Hits real PayPal live API.
+        3. NEW endpoint: POST /api/paypal/capture-order with body {order_id: "..."} — note
+           this will FAIL with 4xx if order has not been approved by a real user (this is
+           expected; we just need to verify the error path returns a meaningful 502).
+        4. Booking with paypal_capture_id + payment_method=paypal + payment_plan=all_now
+           should result in payment_status="paid_full" (not pending_verify).
+        5. Booking with paypal_capture_id + payment_plan=half_now → payment_status="paid_half".
+        6. Booking WITHOUT paypal_capture_id but payment_method=paypal still falls back to
+           paid_full_pending_verify (legacy support).
+        7. Booking with payment_method=cash should set payment_status="unpaid".
+        8. All existing tests (auth, /api/quote, /api/eta, /api/catalog, /api/tos, /api/bookings/me,
+           /api/bookings/upcoming, /api/bookings/{id}/cancel, /api/firebase/status) should still pass.
+        9. Twilio removed — send_owner_sms always returns False, but booking still saves.
+        10. Resend integration: POST /api/auth/register should trigger a welcome email
+            (best-effort, async). RESEND_API_KEY is configured. Can't easily assert in
+            backend tests; just confirm endpoint still returns 200.
+        
+        Test creds: admin@pawfectpristine.com / Pawfect2026! (see /app/memory/test_credentials.md).
+        Booking time slot conflict: tests should pick fresh future dates / times to avoid 409s.
+    - agent: "testing"
+      message: |
+        ✅ v1.6 BACKEND TESTING COMPLETE - ALL 14 TESTS PASSED (100%)
+        
+        Comprehensive v1.6 backend testing completed successfully. All new features working correctly:
+        
+        PRIORITY 1 — PayPal Orders v2 API (LIVE):
+        ✓ GET /api/paypal/config returns enabled=true, env="live", client_id (non-null), currency="USD"
+        ✓ POST /api/paypal/create-order with valid data returns real PayPal order ID, status="CREATED", links array
+        ✓ POST /api/paypal/create-order with amount < 0 correctly returns 400 error
+        ✓ POST /api/paypal/capture-order with invalid order_id returns 502 error (PayPal returns 404, backend catches)
+        
+        PRIORITY 2 — Booking payment_status logic:
+        ✓ Booking with paypal_capture_id + all_now → payment_status="paid_full" (NOT pending_verify)
+        ✓ Booking with paypal_capture_id + half_now → payment_status="paid_half" (NOT pending_verify)
+        ✓ Booking WITHOUT paypal_capture_id + paypal method → payment_status="paid_full_pending_verify" (legacy)
+        ✓ Booking with cash + pay_later → payment_status="unpaid"
+        
+        PRIORITY 3 — Regression tests:
+        ✓ Auth endpoints (register/login/me/logout) still working
+        ✓ GET /api/catalog still working
+        ✓ POST /api/quote with advance fee still working
+        ✓ POST /api/eta still working
+        ✓ GET /api/tos still working
+        ✓ GET /api/firebase/status still working
+        
+        ADDITIONAL VERIFICATION:
+        ✓ Resend emails confirmed working (backend logs show 200 OK responses from Resend API)
+        ✓ Twilio removal confirmed (bookings persist without SMS, sms_sent=false)
+        ✓ No Twilio-related errors in backend logs
+        
+        Test user: v16test5969@example.com
+        All v1.6 features working correctly. Backend is production-ready.

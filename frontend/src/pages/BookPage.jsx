@@ -1,13 +1,13 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, CheckCircle2, Send, ArrowLeft, Wallet } from "lucide-react";
+import { Sparkles, CheckCircle2, Send, ArrowLeft } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import api from "../lib/api";
 import { SegmentedControl, PillToggle, Stepper, PrimaryButton, OutlineButton } from "../components/ui-kit";
 import { CalendarPicker, TimePicker, FormattedDate, toIso } from "../components/CalendarPicker";
 import HelpBanner from "../components/HelpBanner";
-import PayPalHostedButton from "../components/PayPalHostedButton";
+import PayPalPayment from "../components/PayPalPayment";
 import PaymentGuidelines from "../components/PaymentGuidelines";
 import UpsellPanel from "../components/UpsellPanel";
 
@@ -27,6 +27,7 @@ function fireConfetti() {
 }
 
 const TOTAL_STEPS = 5;
+const ACCESS_LABELS = { home: "I'll be home", lockbox: "Lockbox / code", hidden_key: "Hidden key", garage_code: "Garage code", doorman: "Doorman / front desk", other: "Other" };
 
 export default function BookPage() {
   const { user } = useAuth();
@@ -64,6 +65,7 @@ export default function BookPage() {
   // PayPal flow state
   const [guidelinesAccepted, setGuidelinesAccepted] = useState(false);
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
+  const [paypalCapture, setPaypalCapture] = useState(null); // {orderId, captureId, amount}
 
   // Prefill from user
   useEffect(() => {
@@ -154,6 +156,7 @@ export default function BookPage() {
   useEffect(() => {
     setGuidelinesAccepted(false);
     setPaymentConfirmed(false);
+    setPaypalCapture(null);
   }, [paymentPlan, paymentMethod, grandTotal]); // eslint-disable-line
 
   // Force method to "paypal" when plan != pay_later (cash only allowed on pay_later)
@@ -200,11 +203,11 @@ export default function BookPage() {
   const s2Valid = !!date && !!time;
   const s3Valid = name.trim() && phone.trim() && address.trim() && accessMethod
     && (accessMethod !== "other" || accessNotes.trim().length > 2);
-  // For pay_later: just need cash method. For half/all-now: must accept guidelines & click confirm.
+  // For pay_later: just need cash method. For half/all-now: must have captured PayPal payment.
   const requiresPayPal = paymentPlan !== "pay_later" && paymentMethod === "paypal";
   const s4Valid = paymentPlan === "pay_later"
     ? paymentMethod === "cash"
-    : (requiresPayPal && guidelinesAccepted && paymentConfirmed);
+    : (requiresPayPal && guidelinesAccepted && !!paypalCapture?.captureId);
   const s5Valid = tosAccepted;
 
   const submit = async () => {
@@ -234,6 +237,11 @@ export default function BookPage() {
         payload.bathrooms = bathrooms;
       } else if (cat === "pet") {
         payload.pet_count = petCount;
+      }
+      if (paypalCapture?.captureId) {
+        payload.paypal_order_id = paypalCapture.orderId;
+        payload.paypal_capture_id = paypalCapture.captureId;
+        payload.paypal_captured_amount = paypalCapture.amount;
       }
       const { data } = await api.post("/api/bookings", payload);
       setSuccess(data);
@@ -490,33 +498,14 @@ export default function BookPage() {
                         data-testid="paypal-active"
                       >
                         <div className="text-[11px] uppercase tracking-[0.14em] font-semibold text-[var(--text-muted)] mb-3">
-                          Step 1 · Pay ${dueNow} in PayPal
+                          Pay ${dueNow} — card or PayPal, processed instantly
                         </div>
-                        <PayPalHostedButton testid="paypal-button" />
-                        <div className="text-[11px] text-[var(--text-muted)] mt-3 leading-relaxed">
-                          PayPal opens in a new tab. Once your payment shows as <strong>Sent</strong>, come back and tap below.
-                        </div>
-
-                        <div className="text-[11px] uppercase tracking-[0.14em] font-semibold text-[var(--text-muted)] mt-6 mb-2">
-                          Step 2 · Confirm you sent it
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setPaymentConfirmed((v) => !v)}
-                          data-testid="paypal-confirmed-btn"
-                          className={`payment-confirmed-btn ${paymentConfirmed ? "is-active" : ""}`}
-                        >
-                          {paymentConfirmed ? (
-                            <><CheckCircle2 size={18} /> Payment of ${dueNow} sent — let's finish booking</>
-                          ) : (
-                            <><Wallet size={18} /> I've sent ${dueNow} via PayPal</>
-                          )}
-                        </button>
-                        {paymentConfirmed && (
-                          <div className="text-[11.5px] text-[var(--text-muted)] mt-3 leading-relaxed" data-testid="paypal-confirmed-note">
-                            Got it — your booking will be marked <strong>pending verification</strong>. We'll cross-check PayPal and confirm by text within the hour.
-                          </div>
-                        )}
+                        <PayPalPayment
+                          amount={dueNow}
+                          bookingRef={`${user?.id || "guest"}-${Date.now()}`}
+                          onCaptured={(cap) => { setPaypalCapture(cap); setPaymentConfirmed(true); }}
+                          testid="paypal-payment"
+                        />
                       </motion.div>
                     )}
                   </div>
@@ -532,10 +521,7 @@ export default function BookPage() {
                   <Row k="When" v={<><FormattedDate iso={date} /> {time && <span className="text-[var(--text-muted)]">at {time}</span>}</>} />
                   <Row k="Where" v={address} />
                   <Row k="Contact" v={`${name} · ${phone}`} />
-                  <Row k="Access" v={(() => {
-                    const labels = { home: "I'll be home", lockbox: "Lockbox / code", hidden_key: "Hidden key", garage_code: "Garage code", doorman: "Doorman / front desk", other: "Other" };
-                    return <>{labels[accessMethod] || accessMethod}{accessNotes ? <span className="text-[var(--text-muted)]"> — {accessNotes}</span> : null}</>;
-                  })()} />
+                  <Row k="Access" v={<span>{ACCESS_LABELS[accessMethod] || accessMethod}{accessNotes ? <span className="text-[var(--text-muted)]"> — {accessNotes}</span> : null}</span>} />
                   <div className="h-px bg-[var(--border)] my-3" />
                   <Row k="Service price" v={`$${quote?.base_price ?? 0}`} />
                   {quote?.is_advance && <Row k="Advance fee (≥7 days out)" v={`$${quote.advance_fee}`} />}
@@ -577,7 +563,7 @@ export default function BookPage() {
           </AnimatePresence>
 
           {step <= TOTAL_STEPS && (
-            <div className="flex items-center justify-between mt-9 pt-6 border-t border-[var(--border)]">
+            <div className="pp-bookflow-nav flex items-center justify-between gap-3 mt-9 pt-6 border-t border-[var(--border)]">
               {step > 1 ? (<OutlineButton testid="back-btn" onClick={back}>← Back</OutlineButton>) : <span />}
               {step < TOTAL_STEPS ? (
                 <PrimaryButton testid="next-btn" onClick={next}

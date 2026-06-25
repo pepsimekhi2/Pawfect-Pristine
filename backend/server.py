@@ -16,7 +16,6 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, Field, EmailStr
 from typing import Optional, Literal, List
 from datetime import datetime, timezone, timedelta
-from twilio.rest import Client as TwilioClient
 
 from auth_utils import (
     hash_password, verify_password, create_access_token, decode_token, extract_token
@@ -24,16 +23,14 @@ from auth_utils import (
 from pricing import compute_quote, get_public_catalog, SERVICE_CATALOG, generate_time_slots, is_time_in_window, BOOKING_TIME_MIN, BOOKING_TIME_MAX, get_service_duration, hhmm_to_minutes, window_minutes
 from tos import TOS_TEXT, TOS_VERSION, TOS_EFFECTIVE
 import firebase_sync as fb
+import paypal_client as pp
 import asyncio
 
 mongo_url = os.environ['MONGO_URL']
 mongo_client = AsyncIOMotorClient(mongo_url)
 db = mongo_client[os.environ['DB_NAME']]
 
-TWILIO_SID = os.environ.get('TWILIO_ACCOUNT_SID')
-TWILIO_TOKEN = os.environ.get('TWILIO_AUTH_TOKEN')
-TWILIO_FROM = os.environ.get('TWILIO_FROM_NUMBER')
-OWNER_PHONE = os.environ.get('OWNER_PHONE')
+OWNER_EMAIL = os.environ.get('OWNER_EMAIL', 'hello@pawfectpristine.com')
 ORIGIN_LAT = float(os.environ.get('ORIGIN_LAT', '33.7748'))
 ORIGIN_LON = float(os.environ.get('ORIGIN_LON', '-84.2963'))
 ORIGIN_LABEL = os.environ.get('ORIGIN_LABEL', 'Decatur, GA')
@@ -41,7 +38,7 @@ ADMIN_EMAIL = os.environ.get('ADMIN_EMAIL')
 ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD')
 ADMIN_PASSPHRASE = os.environ.get('ADMIN_PASSPHRASE', 'duck')
 RESEND_API_KEY = os.environ.get('RESEND_API_KEY')
-RESEND_FROM = os.environ.get('RESEND_FROM', 'Pawfect & Pristine <onboarding@resend.dev>')
+RESEND_FROM = os.environ.get('RESEND_FROM', 'Pawfect & Pristine <bookings@pawfectpristine.xyz>')
 BREVO_FORM_URL = os.environ.get(
     'BREVO_FORM_URL',
     'https://d9cf8a8a.sibforms.com/serve/MUIFAPON8oiNFYtLkSZQDsRYsOuTwKHAkQulhC03ZdbGNA7bcWU6PnPZmnHb-O8tyxVT-M4HaU3S2FRcBBEQj0sfZ28J8dgJsw7RY6SFoieSfGdCFefSoLD3h0zw5s6voHCsGXWJwuKfFidda3Ne_1o1MjkzpsPovwLjRsQLtRh6bFjl9g-xqn58FsDFXuQ2_Q0luHTmCTET-cARwA=='
@@ -115,6 +112,10 @@ class BookingCreate(BaseModel):
     pet_count: Optional[int] = None             # pet services only
     addons: list[str] = []                       # ["inside_fridge", "baseboards", ...]
     discounts: list[str] = []                    # ["byo_supplies"]
+    # ── PayPal capture (set when paid via card/PayPal on site) ──
+    paypal_order_id: Optional[str] = None
+    paypal_capture_id: Optional[str] = None
+    paypal_captured_amount: Optional[float] = None
 
 
 
@@ -196,15 +197,8 @@ def format_arrival(duration_minutes: float):
 
 
 def send_owner_sms(body: str) -> bool:
-    if not (TWILIO_SID and TWILIO_TOKEN and TWILIO_FROM and OWNER_PHONE):
-        return False
-    try:
-        client = TwilioClient(TWILIO_SID, TWILIO_TOKEN)
-        client.messages.create(body=body, from_=TWILIO_FROM, to=OWNER_PHONE)
-        return True
-    except Exception as e:
-        logger.error(f"Twilio failed: {e}")
-        return False
+    """Twilio removed — booking owner notifications now go via email."""
+    return False
 
 
 async def subscribe_to_brevo(email: str) -> bool:
@@ -235,37 +229,120 @@ async def subscribe_to_brevo(email: str) -> bool:
 def welcome_offer_html(name: str) -> str:
     safe_name = html.escape(name.strip() or "there")
     return f"""
-    <div style="font-family:Arial,sans-serif;line-height:1.6;color:#1f2a24">
-      <h2>Welcome, {safe_name}.</h2>
-      <p>Thanks for joining Pawfect &amp; Pristine. Your first logged-in booking gets 25% off automatically.</p>
-      <p>Book whenever you are ready, and the discount will show in your running total before checkout.</p>
-      <p style="font-size:12px;color:#5f6f67">You can unsubscribe from promotional emails at any time.</p>
+    <div style="font-family:-apple-system,Segoe UI,Arial,sans-serif;line-height:1.65;color:#1f2a24;max-width:560px;margin:0 auto;padding:24px;background:#fdf9f5;border-radius:14px;border:1px solid #e6efe9">
+      <div style="font-family:Georgia,serif;font-size:26px;color:#1e3a2f;margin-bottom:8px">🐾 Welcome, {safe_name}.</div>
+      <p style="margin:14px 0;font-size:15px">Thanks for joining <strong>Pawfect &amp; Pristine</strong>. Your first booking gets <strong style="color:#3d7a5c">25% off</strong> automatically — no code needed.</p>
+      <p style="margin:14px 0;font-size:15px">When you’re ready, head to <a href="https://www.pawfectpristine.xyz/book" style="color:#3d7a5c;font-weight:600">pawfectpristine.xyz/book</a> and your discount will appear in your running total before checkout.</p>
+      <p style="margin:24px 0 6px 0;font-size:13px;color:#5f6f67">– Mekhi &amp; the Pawfect &amp; Pristine team</p>
+      <p style="font-size:11px;color:#8a9890;margin-top:18px">You can unsubscribe from promotional emails any time.</p>
     </div>
     """
 
 
-async def send_resend_email(to_email: str, subject: str, html_body: str) -> bool:
+def booking_confirmation_html(booking: dict) -> str:
+    name = html.escape(booking.get("name", "there"))
+    svc = html.escape(booking.get("service_label", "your service"))
+    tier = html.escape(booking.get("tier_label") or "")
+    when_date = html.escape(booking.get("preferred_date") or "")
+    when_time = html.escape(booking.get("preferred_time") or "")
+    addr = html.escape(booking.get("address", ""))
+    total = booking.get("grand_total", 0)
+    due_now = booking.get("due_now", 0)
+    due_later = booking.get("due_later", 0)
+    paid_status = booking.get("payment_status", "unpaid")
+    paid_chip = {
+        "paid_full": '<span style="background:#3d7a5c;color:#fff;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:600">PAID IN FULL</span>',
+        "paid_half": '<span style="background:#d4a435;color:#1e3a2f;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:600">HALF PAID</span>',
+        "unpaid": '<span style="background:#eef7f2;color:#3d7a5c;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:600">PAY ON ARRIVAL</span>',
+    }.get(paid_status, "")
+    return f"""
+    <div style="font-family:-apple-system,Segoe UI,Arial,sans-serif;line-height:1.65;color:#1f2a24;max-width:560px;margin:0 auto;padding:0">
+      <div style="background:linear-gradient(135deg,#1e3a2f 0%,#3d7a5c 100%);color:#fff;padding:28px 26px;border-radius:14px 14px 0 0">
+        <div style="font-size:13px;letter-spacing:2px;text-transform:uppercase;opacity:.85">Booking confirmed</div>
+        <div style="font-family:Georgia,serif;font-size:30px;margin-top:8px">You’re booked, {name} 🐾</div>
+      </div>
+      <div style="background:#fdf9f5;padding:24px 26px;border:1px solid #e6efe9;border-top:0;border-radius:0 0 14px 14px">
+        <div style="font-size:15px;margin-bottom:18px">Here’s the recap. We’ll text/email you if anything changes.</div>
+        <table style="width:100%;font-size:14px;border-collapse:collapse">
+          <tr><td style="padding:6px 0;color:#5f6f67;width:130px">Service</td><td style="padding:6px 0"><strong>{svc}</strong>{(' · ' + tier) if tier else ''}</td></tr>
+          <tr><td style="padding:6px 0;color:#5f6f67">When</td><td style="padding:6px 0"><strong>{when_date}</strong>{(' at ' + when_time) if when_time else ''}</td></tr>
+          <tr><td style="padding:6px 0;color:#5f6f67">Where</td><td style="padding:6px 0">{addr}</td></tr>
+          <tr><td colspan="2" style="padding:10px 0"><hr style="border:none;border-top:1px solid #e6efe9"/></td></tr>
+          <tr><td style="padding:6px 0;color:#5f6f67">Total</td><td style="padding:6px 0;font-family:Georgia,serif;font-size:22px;color:#1e3a2f"><strong>${total:.2f}</strong></td></tr>
+          <tr><td style="padding:6px 0;color:#5f6f67">Paid today</td><td style="padding:6px 0">${due_now:.2f} {paid_chip}</td></tr>
+          <tr><td style="padding:6px 0;color:#5f6f67">Due on arrival</td><td style="padding:6px 0">${due_later:.2f}</td></tr>
+        </table>
+        <div style="margin-top:22px;font-size:13px;color:#5f6f67">Need to change anything? Visit your <a href="https://www.pawfectpristine.xyz/dashboard" style="color:#3d7a5c;font-weight:600">dashboard</a> or just reply to this email.</div>
+        <div style="margin-top:14px;font-size:12px;color:#8a9890">— Mekhi &amp; the Pawfect &amp; Pristine team · (470) 381-4682</div>
+      </div>
+    </div>
+    """
+
+
+def owner_booking_html(booking: dict) -> str:
+    name = html.escape(booking.get("name", ""))
+    phone = html.escape(booking.get("phone", ""))
+    svc = html.escape(booking.get("service_label", ""))
+    tier = html.escape(booking.get("tier_label") or "")
+    when_date = html.escape(booking.get("preferred_date") or "")
+    when_time = html.escape(booking.get("preferred_time") or "")
+    addr = html.escape(booking.get("address", ""))
+    notes = html.escape(booking.get("notes") or "")
+    access = html.escape(booking.get("access_method", ""))
+    access_notes = html.escape(booking.get("access_notes") or "")
+    total = booking.get("grand_total", 0)
+    due_now = booking.get("due_now", 0)
+    pp_id = html.escape(booking.get("paypal_order_id") or "—")
+    status = booking.get("payment_status", "unpaid")
+    return f"""
+    <div style="font-family:-apple-system,Segoe UI,Arial,sans-serif;line-height:1.6;color:#1f2a24">
+      <h2 style="margin-bottom:6px">🐾 New booking · ${total:.2f}</h2>
+      <div style="color:#5f6f67;font-size:13px;margin-bottom:14px">{status.upper()} · paid today ${due_now:.2f}</div>
+      <table style="font-size:14px;border-collapse:collapse">
+        <tr><td style="padding:4px 12px 4px 0;color:#5f6f67">Customer</td><td><strong>{name}</strong> · <a href="tel:{phone}">{phone}</a></td></tr>
+        <tr><td style="padding:4px 12px 4px 0;color:#5f6f67">Service</td><td>{svc}{(' · ' + tier) if tier else ''}</td></tr>
+        <tr><td style="padding:4px 12px 4px 0;color:#5f6f67">When</td><td>{when_date} {when_time}</td></tr>
+        <tr><td style="padding:4px 12px 4px 0;color:#5f6f67">Address</td><td>{addr}</td></tr>
+        <tr><td style="padding:4px 12px 4px 0;color:#5f6f67">Access</td><td>{access}{(' — ' + access_notes) if access_notes else ''}</td></tr>
+        <tr><td style="padding:4px 12px 4px 0;color:#5f6f67">Notes</td><td>{notes or '—'}</td></tr>
+        <tr><td style="padding:4px 12px 4px 0;color:#5f6f67">PayPal order</td><td><code>{pp_id}</code></td></tr>
+      </table>
+    </div>
+    """
+
+
+async def send_resend_email(to_email, subject: str, html_body: str, reply_to: Optional[str] = None) -> bool:
+    """Send a transactional email via Resend. `to_email` can be a str or list."""
     if not RESEND_API_KEY:
+        logger.info("Resend not configured — skipping email")
         return False
+    if isinstance(to_email, str):
+        to_list = [to_email]
+    else:
+        to_list = list(to_email)
     payload = {
         "from": RESEND_FROM,
-        "to": [to_email],
+        "to": to_list,
         "subject": subject,
         "html": html_body,
     }
+    if reply_to:
+        payload["reply_to"] = reply_to
     try:
-        async with httpx.AsyncClient(timeout=10) as client:
+        async with httpx.AsyncClient(timeout=12) as client:
             response = await client.post(
                 "https://api.resend.com/emails",
                 json=payload,
-                headers={"Authorization": f"Bearer {RESEND_API_KEY}"},
+                headers={"Authorization": f"Bearer {RESEND_API_KEY}",
+                         "Content-Type": "application/json"},
             )
         if response.status_code >= 400:
-            logger.warning(f"Resend email failed for {to_email}: {response.status_code} {response.text[:120]}")
+            logger.warning(f"Resend email failed for {to_list}: {response.status_code} {response.text[:240]}")
             return False
+        logger.info(f"Resend email sent to {to_list} · subject={subject!r}")
         return True
     except Exception as e:
-        logger.warning(f"Resend email failed for {to_email}: {e}")
+        logger.warning(f"Resend email failed for {to_list}: {e}")
         return False
 
 
@@ -581,6 +658,25 @@ async def create_booking(payload: BookingCreate, request: Request):
         due_now = 0
     due_later = round(grand_total - due_now, 2)
 
+    # Compute payment_status — favor real PayPal capture proof when present
+    paid_via_paypal = bool(payload.paypal_capture_id) and payload.payment_method == "paypal"
+    if paid_via_paypal:
+        if payload.payment_plan == "all_now":
+            payment_status = "paid_full"
+        elif payload.payment_plan == "half_now":
+            payment_status = "paid_half"
+        else:
+            payment_status = "paid_full"  # shouldn't happen but be safe
+    elif payload.payment_method == "paypal":
+        # PayPal selected but no capture id (legacy / hosted button) → pending verify
+        payment_status = (
+            "paid_full_pending_verify" if payload.payment_plan == "all_now"
+            else "paid_half_pending_verify" if payload.payment_plan == "half_now"
+            else "unpaid"
+        )
+    else:
+        payment_status = "unpaid"
+
     booking = {
         "id": str(uuid.uuid4()),
         "user_id": user["id"] if user else None,
@@ -611,11 +707,10 @@ async def create_booking(payload: BookingCreate, request: Request):
         "due_later": due_later,
         "payment_plan": payload.payment_plan,
         "payment_method": payload.payment_method,
-        "payment_status": (
-            "paid_full_pending_verify" if payload.payment_plan == "all_now" and payload.payment_method == "paypal"
-            else "paid_half_pending_verify" if payload.payment_plan == "half_now" and payload.payment_method == "paypal"
-            else "unpaid"
-        ),
+        "payment_status": payment_status,
+        "paypal_order_id": payload.paypal_order_id,
+        "paypal_capture_id": payload.paypal_capture_id,
+        "paypal_captured_amount": payload.paypal_captured_amount,
         "status": "scheduled",
         "eta": eta_dict,
         "tos_accepted": True,
@@ -624,35 +719,29 @@ async def create_booking(payload: BookingCreate, request: Request):
     }
     booking["sms_sent"] = False
 
-    # Build SMS body
-    eta_line = ""
-    if eta_dict:
-        eta_line = f" · {eta_dict['distance_miles']}mi/~{int(eta_dict['duration_minutes'])}min"
-        if eta_dict["extra_fee"] > 0:
-            eta_line += f" (+${eta_dict['extra_fee']} travel)"
-    when = f"{payload.preferred_date} {payload.preferred_time}".strip() or "ASAP"
-    pay_summary = {
-        "all_now": "PAID IN FULL via PayPal (verify)" if payload.payment_method == "paypal" else "PAID IN FULL",
-        "half_now": f"HALF PAID via PayPal (${due_now}, verify) · ${due_later} on arrival" if payload.payment_method == "paypal"
-                     else f"HALF PAID (${due_now}) · ${due_later} on arrival",
-        "pay_later": f"PAY ON ARRIVAL · ${grand_total} {payload.payment_method}",
-    }[payload.payment_plan]
-
-    sms_body = (
-        f"🐾 New Pawfect booking!\n"
-        f"{payload.name} ({payload.phone})\n"
-        f"{quote_data['service_label']}"
-        + (f" — {quote_data['tier_label']}" if quote_data["tier_label"] else "") + "\n"
-        f"When: {when}\n"
-        f"Addr: {payload.address}{eta_line}\n"
-        f"${grand_total} · {pay_summary}"
-    )
-    if payload.notes:
-        sms_body += f"\nNote: {payload.notes[:100]}"
-
-    booking["sms_sent"] = send_owner_sms(sms_body)
+    booking["sms_sent"] = False  # legacy field — kept for compatibility
 
     await db.bookings.insert_one(booking)
+
+    # ── Notifications ──
+    # 1) Customer confirmation
+    customer_email = None
+    if user and user.get("email"):
+        customer_email = user["email"]
+    if customer_email:
+        asyncio.create_task(send_resend_email(
+            customer_email,
+            f"Booking confirmed — {quote_data['service_label']} on {payload.preferred_date}",
+            booking_confirmation_html(booking),
+        ))
+    # 2) Owner notification
+    if OWNER_EMAIL:
+        asyncio.create_task(send_resend_email(
+            OWNER_EMAIL,
+            f"🐾 New booking · ${booking['grand_total']:.2f} · {payload.name}",
+            owner_booking_html(booking),
+            reply_to=customer_email,
+        ))
 
     # Best-effort Firebase mirror — never blocks
     asyncio.create_task(fb.put(f"bookings/{booking['id']}", fb.safe_serializable(booking)))
@@ -753,6 +842,77 @@ async def availability(date: str, service: Optional[str] = None, tier: Optional[
     }
 
 
+# ============= PayPal (Orders v2 — on-site card processing) =============
+class PayPalCreatePayload(BaseModel):
+    amount: float
+    currency: str = "USD"
+    booking_ref: Optional[str] = None
+    description: Optional[str] = None
+
+
+class PayPalCapturePayload(BaseModel):
+    order_id: str
+
+
+@api_router.get("/paypal/config")
+async def paypal_config():
+    """Public PayPal config consumed by the frontend SDK loader."""
+    return {
+        "enabled": pp.enabled(),
+        "env": pp.PAYPAL_ENV,
+        "client_id": pp.PAYPAL_CLIENT_ID if pp.enabled() else None,
+        "currency": "USD",
+    }
+
+
+@api_router.post("/paypal/create-order")
+async def paypal_create(payload: PayPalCreatePayload):
+    if not pp.enabled():
+        raise HTTPException(status_code=503, detail="PayPal is not configured.")
+    if payload.amount is None or payload.amount <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be greater than 0.")
+    try:
+        result = await pp.create_order(
+            amount=payload.amount,
+            currency=payload.currency or "USD",
+            booking_ref=payload.booking_ref,
+            description=payload.description or "Pawfect & Pristine booking",
+        )
+    except Exception as e:
+        logger.warning(f"PayPal create_order error: {e}")
+        raise HTTPException(status_code=502, detail=f"PayPal could not create the order. {str(e)[:140]}")
+    return {"id": result.get("id"), "status": result.get("status"), "links": result.get("links", [])}
+
+
+@api_router.post("/paypal/capture-order")
+async def paypal_capture(payload: PayPalCapturePayload):
+    if not pp.enabled():
+        raise HTTPException(status_code=503, detail="PayPal is not configured.")
+    try:
+        result = await pp.capture_order(payload.order_id)
+    except Exception as e:
+        logger.warning(f"PayPal capture_order error: {e}")
+        raise HTTPException(status_code=502, detail=f"PayPal capture failed. {str(e)[:140]}")
+    # Walk the response for the actual capture id + amount
+    capture_id = None
+    captured_amount = None
+    try:
+        pu = (result.get("purchase_units") or [{}])[0]
+        cap = ((pu.get("payments") or {}).get("captures") or [{}])[0]
+        capture_id = cap.get("id")
+        amt = cap.get("amount") or {}
+        captured_amount = float(amt.get("value")) if amt.get("value") else None
+    except Exception:
+        pass
+    return {
+        "id": result.get("id"),
+        "status": result.get("status"),
+        "capture_id": capture_id,
+        "captured_amount": captured_amount,
+        "raw": {"status": result.get("status"), "payer": result.get("payer", {}).get("email_address")},
+    }
+
+
 # ============= Admin =============
 async def require_admin(user: dict = Depends(get_current_user)) -> dict:
     if user.get("role") != "admin":
@@ -820,20 +980,13 @@ async def admin_notify_otw(booking_id: str, _admin: dict = Depends(require_admin
         f"Hi {booking.get('name', 'there')}! This is Pawfect & Pristine — "
         f"I'm on the way to your {booking.get('service_label', 'service')} now. See you soon! 🐾"
     )
-    sms_sent = False
-    if TWILIO_SID and TWILIO_TOKEN and TWILIO_FROM and booking.get("phone"):
-        try:
-            client = TwilioClient(TWILIO_SID, TWILIO_TOKEN)
-            client.messages.create(body=sms_body, from_=TWILIO_FROM, to=booking["phone"])
-            sms_sent = True
-        except Exception as e:
-            logger.warning(f"Twilio send failed: {e}")
     await db.bookings.update_one(
         {"id": booking_id},
-        {"$set": {"status": "on_the_way", "otw_notified_at": now, "otw_sms_sent": sms_sent}},
+        {"$set": {"status": "on_the_way", "otw_notified_at": now}},
     )
     asyncio.create_task(fb.patch(f"bookings/{booking_id}", {"status": "on_the_way", "otw_notified_at": now}))
-    return {"ok": True, "sms_sent": sms_sent, "sms_body": sms_body if not sms_sent else None,
+    # Return tel:/sms: deeplinks — admin's device will open native Messages
+    return {"ok": True, "sms_sent": False, "sms_body": sms_body,
             "tel_link": f"tel:{booking.get('phone')}",
             "sms_link": f"sms:{booking.get('phone')}?&body={quote_plus(sms_body)}"}
 
